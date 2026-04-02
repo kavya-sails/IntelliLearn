@@ -17,18 +17,3 @@ __pycache__/
 # IDE settings
 .vscode/
 .idea/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Test coverage
-.coverage
-htmlcov/
-
-# Distribution
-dist/
-build/
-*.egg-info/
-
-node_modules/
