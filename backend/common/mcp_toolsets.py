@@ -5,9 +5,7 @@ import os
 import sys
 
 _MCP_SERVER_SCRIPT = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__), "..", "..", "mcp_server", "pgsql_mcp_server.py"
-    )
+    os.path.join(os.path.dirname(__file__), "..", "mcp_server", "pgsql_mcp_server.py")
 )
 
 
