@@ -295,7 +295,7 @@ async def start_quiz(session_id: str):
 
         return {
             "session_id": session_id,
-            "message": reply_text,
+            "message": reply_data,
             "status": "QUIZ_IN_PROGRESS",
         }
 
@@ -369,4 +369,62 @@ async def done_quiz(session_id: str, quiz_results: List[dict] = Body(...)):
         raise
     except Exception as e:
         logger.exception(f"Error in done_quiz: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@router.post("/chat/{session_id}/analyze_gaps")
+async def analyze_gaps(session_id: str):
+    try:
+        session = get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session["status"] != "QUIZ_DONE":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot start gap analysis in current state: {session['status']}",
+            )
+
+        # Save user action in chat history
+        save_chat_message(
+            session_id,
+            "user",
+            "[User started gap analysis]",
+            meta={"action": "analyze_gaps"},
+        )
+
+        prompt = {
+            "session_id": session_id,
+            "user_id": session.get("user_id", 1),
+            "action": "analyze_gaps",
+            "goal": session.get("goal")
+        }
+
+        agent_response = await run_agent(
+            prompt, session.get("user_id", 1), session_id
+        )
+        logger.info(f"Agent response after starting gap analysis: {agent_response}")
+        reply_data = agent_response.get("reply", [])
+        if isinstance(reply_data, list):
+            reply_text = " ".join(str(item) for item in reply_data)
+        elif isinstance(reply_data, dict):
+            reply_text = reply_data.get(
+                "message", "Gap analysis completed! Here are your results."
+            )
+        else:
+            reply_text = str(reply_data)
+
+        # Save assistant response
+        save_chat_message(session_id, "assistant", reply_text)
+        updated_session = get_session(session_id)
+
+        return {
+            "session_id": session_id,
+            "message": reply_data,
+            "status": updated_session["status"],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in analyze_gaps: {e}")
         raise HTTPException(status_code=500, detail=str(e))

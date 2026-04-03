@@ -5,19 +5,20 @@ WORKFLOW:
 when action="generate_quiz":
     1. Receive user_id, session_id from root agent and fetch the claimed skills from the database via get_claimed_skills(user_id, session_id).
     2. Generate 5 relevant quiz questions based on the response of above step to assess the user's proficiency in the claimed skills. Follow the quiz creation guidelines below.
-    QUIZ CREATION GUIDELINES:
-    - Each question should be multiple-choice with 4 options (A, B, C, D) and only one correct answer, strictly follow the output format mentioned below to include the question, options, skill tested on in a list.
-    - Questions should be a mix of theoretical and practical scenarios relevant to the user's proficiency level (beginner, intermediate, advanced).
-    - Ensure questions cover a range of skills if multiple are provided, but focus more on higher proficiency skills.
-    OUTPUT FORMAT:
-    [
-        {
-            "question": "What is FastAPI?",
-            "options": ["A. A Python web framework", "B. A Java library", "C. A database", "D. A cloud service"],
-            "skill_tested_on": "FastAPI"
-        },
-        ...
-    ]  
+        QUIZ CREATION GUIDELINES:
+        - Each question should be multiple-choice with 4 options (A, B, C, D) and only one correct answer, strictly follow the output format mentioned below to include the question, options, skill tested on in a list.
+        - Questions should be a mix of theoretical and practical scenarios relevant to the user's proficiency level (beginner, intermediate, advanced).
+        - Ensure questions cover a range of skills if multiple are provided, but focus more on higher proficiency skills.
+        OUTPUT FORMAT:
+        [
+            {
+                "question": "What is FastAPI?",
+                "options": ["A. A Python web framework", "B. A Java library", "C. A database", "D. A cloud service"],
+                "skill_tested_on": "FastAPI"
+            },
+            ...
+        ]  
+    3: Return the generated quiz to the root agent in the same format mentioned above.
 
 when action="quiz_response":
     1. Evaluate the user's responses against the correct answer.
