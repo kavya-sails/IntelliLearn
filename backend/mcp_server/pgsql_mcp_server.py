@@ -229,6 +229,55 @@ def save_quiz(user_id: str, session_id: str, quiz_json: str) -> dict:
     finally:
         conn.close()
 
+@mcp.tool()
+def get_quiz_results(user_id: str, session_id: str) -> Optional[dict]:
+    """Retrieve quiz results for a session. Returns None if not found."""
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM assessments WHERE user_id=%s AND session_id=%s", (int(user_id), int(session_id))
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+    
+@mcp.tool()
+def save_gap_analysis(user_id: str, session_id: str, gap_analysis_json: str) -> dict:
+    """
+    Save the generated gap analysis report for a session.
 
+    Args:
+        user_id:  ID of the user (will be converted to int)
+        session_id: ID of the chat session (will be converted to int)
+        gap_analysis_json: JSON object string containing the gap analysis report
+    Returns: {session_id, gap_analysis_saved: bool}
+    """
+    try:
+        gap_analysis = json.loads(gap_analysis_json)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"gap_analysis_json is not valid JSON: {e}")
+
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """INSERT INTO gap_analysis (user_id, session_id, analysis)
+                   VALUES (%s, %s, %s::jsonb)
+                   ON CONFLICT (session_id)
+                   DO UPDATE SET analysis=EXCLUDED.analysis
+                   RETURNING *""",
+                (int(user_id), int(session_id), json.dumps(gap_analysis)),
+            )
+            row = dict(cur.fetchone())
+            return {
+                "session_id": session_id,
+                "gap_analysis_saved": True,
+            }
+    finally:
+        conn.close()    
+
+        
 if __name__ == "__main__":
     mcp.run()
