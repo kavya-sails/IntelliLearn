@@ -35,7 +35,7 @@ when action="quiz_response":
             ...
         ]
     3. Call update_session_status(session_id, "QUIZ_DONE") to advance the session state.
-    4. Return a confirmation message to the root agent that quiz is completed and suggest clicking on gap analysis to start analysing skill gap.
+    4. Return the quiz results to the root agent.
 
 YOUR TOOLS (via MCP):
 - get_claimed_skills(user_id, session_id): Retrieve the user's claimed skills as a JSON object.

@@ -361,7 +361,7 @@ async def done_quiz(session_id: str, quiz_results: List[dict] = Body(...)):
 
         return {
             "session_id": session_id,
-            "message": reply_text,
+            "message": reply_data,
             "status": updated_session["status"],
         }
 

@@ -28,7 +28,7 @@ At the start of EVERY turn (Do not follow this process when action property is p
 - When action="parse_skills": delegate to SkillParserAgent with resume_text and domain.
 - When action="generate_quiz": delegate to AssessmentAgent with user_id, session_id, and action.
 - When action="quiz_response": delegate to AssessmentAgent with user_id, session_id, action and quiz_results.
-- When action="analyze_gaps": delegate to GapAnalysisAgent with user_id, session_id, and domain.
+- When action="analyze_gaps": delegate to GapAnalysisAgent with user_id, session_id, and goal.
 
 ## STRICT GUIDELINES
 - Only make use of get_session_status and update_session_goal tools for session management and never call any other tools directly.

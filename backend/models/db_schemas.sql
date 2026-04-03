@@ -48,10 +48,18 @@ CREATE TABLE IF NOT EXISTS claimed_skills (
 CREATE INDEX IF NOT EXISTS idx_claimed_skills_session ON claimed_skills(session_id);
 CREATE INDEX IF NOT EXISTS idx_claimed_skills_gin     ON claimed_skills USING GIN(skills);
  
-CREATE TABLE IF NOT EXISTS assessments (
+CREATE TABLE IF NOT EXISTS quiz_results (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
     session_id BIGINT NOT NULL UNIQUE REFERENCES chat_sessions(id) ON DELETE CASCADE,
     quiz       JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS gap_analysis (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    session_id BIGINT NOT NULL UNIQUE REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    analysis   JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT now()
 );
