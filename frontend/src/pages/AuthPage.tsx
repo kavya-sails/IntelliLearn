@@ -1,19 +1,75 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Brain, Github, Mail, Lock, User, ArrowRight, Sparkles } from "lucide-react";
 import authIllustration from "@/assets/auth-illustration.jpg";
+
+const API_BASE = "http://localhost:8000/api";
 
 const AuthPage = ({ onAuth }: { onAuth: () => void }) => {
   const [tab, setTab] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState<string>("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onAuth();
+    setLoading(true);
+    setAuthError("");
+
+    try {
+      let userId = "";
+      if (tab === "register") {
+        if (!name.trim() || !email.trim() || !password.trim()) {
+          setAuthError("Please fill in Full Name, Email, and Password.");
+          return;
+        }
+        const res = await fetch(`${API_BASE}/user/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        });
+        if (!res.ok) {
+          setAuthError("Registration failed. Please try again.");
+          return;
+        }
+        const data = await res.json();
+        userId = data.id;
+      } else {
+        if (!email.trim() || !password.trim()) {
+          setAuthError("Email and Password are required.");
+          return;
+        }
+        const res = await fetch(`${API_BASE}/user/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, {
+          method: "POST",
+        });
+        if (!res.ok) {
+          if (res.status === 401) {
+            setAuthError("Email or password is incorrect.");
+            return;
+          }
+          setAuthError("Sign in failed. Please try again.");
+          return;
+        }
+        const data = await res.json();
+        userId = data.id;
+      }
+      localStorage.setItem("user_id", userId);
+      onAuth();
+      navigate("/app/chat");
+    } catch (error) {
+      console.error("Auth error:", error);
+      setAuthError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -63,7 +119,10 @@ const AuthPage = ({ onAuth }: { onAuth: () => void }) => {
             {(["login", "register"] as const).map((t) => (
               <button
                 key={t}
-                onClick={() => setTab(t)}
+                onClick={() => {
+                  setTab(t);
+                  setAuthError("");
+                }}
                 className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
                   tab === t
                     ? "bg-card shadow-sm text-foreground"
@@ -76,6 +135,12 @@ const AuthPage = ({ onAuth }: { onAuth: () => void }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {authError && (
+              <Alert variant="destructive" className="animate-fade-in">
+                <AlertDescription>{authError}</AlertDescription>
+              </Alert>
+            )}
+
             {tab === "register" && (
               <div className="space-y-2 animate-fade-in">
                 <Label htmlFor="name">Full Name</Label>
@@ -128,9 +193,9 @@ const AuthPage = ({ onAuth }: { onAuth: () => void }) => {
               </button>
             )}
 
-            <Button type="submit" variant="gradient" className="w-full" size="lg">
-              {tab === "login" ? "Sign In" : "Create Account"}
-              <ArrowRight className="h-4 w-4 ml-1" />
+            <Button type="submit" variant="gradient" className="w-full" size="lg" disabled={loading}>
+              {loading ? "Please wait..." : tab === "login" ? "Sign In" : "Create Account"}
+              {!loading && <ArrowRight className="h-4 w-4 ml-1" />}
             </Button>
           </form>
 

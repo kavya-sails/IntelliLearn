@@ -13,11 +13,14 @@ from services.db_service import (
     get_chat_history,
     update_session_status,
     get_claimed_skills,
+    save_user,
 )
 from models.schemas import (
     ChatMessageRequest,
     ChatMessageResponse,
     SessionCreateResponse,
+    UserCreate,
+    UserResponse,
 )
 
 router = APIRouter()
@@ -27,6 +30,27 @@ logger = logging.getLogger(__name__)
 @router.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@router.post("/user/register", response_model=UserResponse)
+async def register_user(request: UserCreate):
+    user = save_user(request.name, request.email, request.password)
+    return UserResponse(
+        id=str(user["id"]),
+        name=user["name"],
+        email=user["email"],
+        created_at=user["created_at"],
+    )
+
+
+@router.post("/user/login")
+async def login_user(email: str, password: str):
+    from services.db_service import get_user_by_email
+
+    user = get_user_by_email(email)
+    if not user or user["password"] != password:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return {"id": str(user["id"]), "name": user["name"], "email": user["email"]}
 
 
 @router.post("/chat/new", response_model=SessionCreateResponse)

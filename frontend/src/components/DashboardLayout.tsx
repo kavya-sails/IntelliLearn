@@ -9,6 +9,7 @@ interface DashboardLayoutProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onLogout: () => void;
+  onNewChat?: () => void;
 }
 
 const navItems = [
@@ -27,7 +28,7 @@ const chatHistory = [
   "SQL Practice Session",
 ];
 
-const DashboardLayout = ({ children, activeTab, onTabChange, onLogout }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,7 +53,10 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout }: Dashboa
           <Button
             variant="gradient"
             className={cn("w-full", !sidebarOpen && "px-2")}
-            onClick={() => onTabChange("chat")}
+            onClick={() => {
+              onTabChange("chat");
+              onNewChat?.();
+            }}
           >
             <Plus className="h-4 w-4" />
             {sidebarOpen && <span>New Chat</span>}

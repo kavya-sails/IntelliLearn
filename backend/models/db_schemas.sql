@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email      TEXT UNIQUE,
     name       TEXT,
+    password  TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
