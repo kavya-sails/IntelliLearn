@@ -2,7 +2,8 @@ import os
 import shutil
 import tempfile
 import PyPDF2
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Body
+from typing import List
 import logging
 from services.agent_runner import run_agent
 from services.db_service import (
@@ -58,6 +59,7 @@ async def send_message(request: ChatMessageRequest):
 
         prompt = {
             "session_id": session_id,
+            "user_id": session.get("user_id", 1),
             "user_message": user_message,
             "current_status": session["status"],
             # "goal": session.get("goal"),
@@ -142,6 +144,7 @@ async def upload_resume(session_id: str, file: UploadFile = File(...)):
 
         prompt = {
             "session_id": session_id,
+            "user_id": session.get("user_id", 1),
             "action": "parse_skills",
             "resume_text": resume_text,
             "current_status": "PARSING_SKILLS",
@@ -217,3 +220,129 @@ async def get_skills(session_id: str):
         return {"session_id": session_id, "skills": [], "skill_count": 0}
 
     return {"session_id": session_id, "skills": skills["skills"]}
+
+@router.post("/chat/{session_id}/start_quiz")
+async def start_quiz(session_id: str):
+    try:
+        session = get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session["status"] != "AWAITING_QUIZ":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot start quiz in current state: {session['status']}",
+            )
+
+        # Save user action in chat history
+        save_chat_message(
+            session_id,
+            "user",
+            "[User started quiz]",
+            meta={"action": "generate_quiz"},
+        )
+
+        original_status = session["status"]
+        update_session_status(session_id, "QUIZ_IN_PROGRESS")
+
+        prompt = {
+            "session_id": session_id,
+            "user_id": session.get("user_id", 1),
+            "action": "generate_quiz",
+            "current_status": "QUIZ_IN_PROGRESS"
+        }
+
+        agent_response = await run_agent(
+            prompt, session.get("user_id", 1), session_id
+        )
+        logger.info(f"Agent response after starting quiz: {agent_response}")
+        reply_data = agent_response.get("reply", [])
+        if isinstance(reply_data, list):
+            reply_text = " ".join(str(item) for item in reply_data)
+        elif isinstance(reply_data, dict):
+            reply_text = reply_data.get(
+                "message", "Quiz started! Here are your questions."
+            )
+        else:
+            reply_text = str(reply_data)
+
+        # Save assistant response
+        save_chat_message(session_id, "assistant", reply_text)
+
+        return {
+            "session_id": session_id,
+            "message": reply_text,
+            "status": "QUIZ_IN_PROGRESS",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in start_quiz: {e}")
+        update_session_status(session_id, original_status)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/chat/{session_id}/done_quiz")
+async def done_quiz(session_id: str, quiz_results: List[dict] = Body(...)):
+    try:
+        session = get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session["status"] != "QUIZ_IN_PROGRESS":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot submit quiz in current state: {session['status']}",
+            )
+
+        # Save quiz results in chat history
+        save_chat_message(
+            session_id,
+            "user",
+            "[User completed quiz]",
+            meta={
+                "action": "quiz_response",
+                "quiz_results": quiz_results,
+            },
+        )
+
+        # Send results to agent for gap analysis
+        prompt = {
+            "session_id": session_id,
+            "user_id": session.get("user_id", 1),
+            "action": "quiz_response",
+            "quiz_results": quiz_results
+        }
+
+        agent_response = await run_agent(
+            prompt, session.get("user_id", 1), session_id
+        )
+
+        logger.info(f"Agent response after quiz submission: {agent_response}")
+
+        reply_data = agent_response.get("reply", [])
+        if isinstance(reply_data, list):
+            reply_text = " ".join(str(item) for item in reply_data)
+        elif isinstance(reply_data, dict):
+            reply_text = reply_data.get(
+                "message",
+                "Quiz analyzed! Here is your gap analysis.",
+            )
+        else:
+            reply_text = str(reply_data)
+
+        # Save assistant response
+        save_chat_message(session_id, "assistant", reply_text)
+        updated_session = get_session(session_id)
+
+        return {
+            "session_id": session_id,
+            "message": reply_text,
+            "status": updated_session["status"],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in done_quiz: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

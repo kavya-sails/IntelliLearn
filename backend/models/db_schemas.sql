@@ -36,6 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id
 -- ── CLAIMED SKILLS ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS claimed_skills (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
     session_id BIGINT NOT NULL UNIQUE REFERENCES chat_sessions(id) ON DELETE CASCADE,
     skills     JSONB NOT NULL DEFAULT '[]',
     source     TEXT NOT NULL DEFAULT 'resume',
@@ -46,3 +47,10 @@ CREATE TABLE IF NOT EXISTS claimed_skills (
 CREATE INDEX IF NOT EXISTS idx_claimed_skills_session ON claimed_skills(session_id);
 CREATE INDEX IF NOT EXISTS idx_claimed_skills_gin     ON claimed_skills USING GIN(skills);
  
+CREATE TABLE IF NOT EXISTS assessments (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    session_id BIGINT NOT NULL UNIQUE REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    quiz       JSONB NOT NULL DEFAULT '[]',
+    created_at TIMESTAMPTZ DEFAULT now()
+);

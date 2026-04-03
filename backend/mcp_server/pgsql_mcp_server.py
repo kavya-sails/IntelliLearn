@@ -123,11 +123,12 @@ def update_session_status(session_id: str, status: str) -> dict:
 
 
 @mcp.tool()
-def save_claimed_skills(session_id: str, skills_json: str) -> dict:
+def save_claimed_skills(user_id: str, session_id: str, skills_json: str) -> dict:
     """
     Upsert extracted skills for a session.
 
     Args:
+        user_id:     ID of the user (will be converted to int)
         session_id:  ID of the chat session (will be converted to int)
         skills_json: JSON array string. Each element:
                        {"skill_name": "FastAPI", "level": "advanced"}
@@ -157,12 +158,12 @@ def save_claimed_skills(session_id: str, skills_json: str) -> dict:
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                """INSERT INTO claimed_skills (session_id, skills, source)
-                   VALUES (%s, %s::jsonb, 'resume')
+                """INSERT INTO claimed_skills (user_id, session_id, skills, source)
+                   VALUES (%s, %s, %s::jsonb, 'resume')
                    ON CONFLICT (session_id)
                    DO UPDATE SET skills=EXCLUDED.skills, updated_at=now()
                    RETURNING *""",
-                (int(session_id), json.dumps(skills)),
+                (int(user_id), int(session_id), json.dumps(skills)),
             )
             row = dict(cur.fetchone())
             return {
@@ -175,16 +176,56 @@ def save_claimed_skills(session_id: str, skills_json: str) -> dict:
 
 
 @mcp.tool()
-def get_claimed_skills(session_id: str) -> Optional[dict]:
+def get_claimed_skills(user_id: str, session_id: str) -> Optional[dict]:
     """Retrieve claimed skills row for a session. Returns None if not found."""
     conn = _conn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM claimed_skills WHERE session_id=%s", (int(session_id),)
+                "SELECT * FROM claimed_skills WHERE user_id=%s AND session_id=%s", (int(user_id), int(session_id))
             )
             row = cur.fetchone()
             return dict(row) if row else None
+    finally:
+        conn.close()
+
+@mcp.tool()
+def save_quiz(user_id: str, session_id: str, quiz_json: str) -> dict:
+    """
+    Save the generated quiz for a session.
+
+    Args:
+        user_id:  ID of the user (will be converted to int)
+        session_id: ID of the chat session (will be converted to int)
+        quiz_json: JSON array string. Each element:
+                    {"question": "What is FastAPI?", "options": ["A", "B", "C"], "answer": "A", "user_response": "A", "skill_tested_on": "FastAPI"}
+
+    Returns: {session_id, quiz_saved: bool}
+    """
+    try:
+        quiz = json.loads(quiz_json)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"quiz_json is not valid JSON: {e}")
+
+    if not isinstance(quiz, list):
+        raise ValueError("quiz_json must be a JSON array")
+
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """INSERT INTO assessments (user_id, session_id, quiz)
+                   VALUES (%s, %s, %s::jsonb)
+                   ON CONFLICT (session_id)
+                   DO UPDATE SET quiz=EXCLUDED.quiz
+                   RETURNING *""",
+                (int(user_id), int(session_id), json.dumps(quiz)),
+            )
+            row = dict(cur.fetchone())
+            return {
+                "session_id": session_id,
+                "quiz_saved": True,
+            }
     finally:
         conn.close()
 
