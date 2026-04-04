@@ -5,11 +5,19 @@ import { cn } from "@/lib/utils";
 import aiAvatar from "@/assets/ai-avatar.png";
 import WelcomeScreen from "./WelcomeScreen";
 
+type QuizItem = {
+  id: number;
+  question: string;
+  options: string[];
+  skill: string;
+};
+
 interface Message {
   id: string;
   role: "user" | "ai";
   content: string;
   timestamp: Date;
+  quiz?: QuizItem[];
   file?: {
     name: string;
     size: number;
@@ -44,12 +52,57 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   const [isTyping, setIsTyping] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [quizSelections, setQuizSelections] = useState<Record<string, number[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const sessionId = localStorage.getItem("session_id");
+    if (sessionId) {
+      fetch(`${API_BASE}/chat/${sessionId}/history`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.messages && data.messages.length > 0) {
+            const historicalMessages: Message[] = data.messages.map((msg: { role: string; content: string; created_at?: string; meta?: unknown }, idx: number) => {
+              const message: Message = {
+                id: `hist-${idx}`,
+                role: msg.role === "user" ? "user" : "ai",
+                content: msg.content,
+                timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
+              };
+
+              if (msg.meta && typeof msg.meta === "object") {
+                const meta = msg.meta as Record<string, unknown>;
+                if (meta.action === "generate_quiz" || meta.action === "quiz_response") {
+                  const quizMatch = msg.content.match(/\{[^}]+\}/g);
+                  if (quizMatch) {
+                    try {
+                      const parsed = JSON.parse(quizMatch.join(""));
+                      if (Array.isArray(parsed)) {
+                        message.quiz = parsed.map((q, qi) => ({
+                          id: typeof q.id === "number" ? q.id : qi + 1,
+                          question: q.question || "",
+                          options: Array.isArray(q.options) ? q.options.map(String) : [],
+                          skill: q.skill_tested_on || q.skill || "",
+                        }));
+                      }
+                    } catch {}
+                  }
+                }
+              }
+
+              return message;
+            });
+            setMessages([...initialMessages, ...historicalMessages]);
+          }
+        })
+        .catch(console.error);
+    }
+  }, []);
 
   const handleStartChat = (type: string) => {
     setMessages([
@@ -87,6 +140,114 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   if (showWelcome) {
     return <WelcomeScreen onStartChat={handleStartChat} />;
   }
+
+  const isMultiSelectQuestion = (q: string) => {
+    const s = q.toLowerCase();
+    return (
+      s.includes("select all") ||
+      s.includes("choose all") ||
+      s.includes("select any") ||
+      s.includes("choose any") ||
+      s.includes("select two") ||
+      s.includes("choose two") ||
+      s.includes("multiple answers") ||
+      s.includes("more than one")
+    );
+  };
+
+  const handleStartQuiz = async () => {
+    if (isTyping) return;
+    const sessionId = localStorage.getItem("session_id");
+    if (!sessionId) return;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        role: "user",
+        content: "Yes",
+        timestamp: new Date(),
+      },
+    ]);
+    setIsTyping(true);
+    try {
+      const res = await fetch(`${API_BASE}/chat/${encodeURIComponent(sessionId)}/start_quiz`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error(`start_quiz failed (${res.status})`);
+      }
+      const data = (await res.json()) as {
+        session_id: number | string;
+        status?: string;
+        quiz?: QuizItem[];
+        message?: unknown;
+      };
+      if (data.session_id != null) {
+        localStorage.setItem("session_id", String(data.session_id));
+      }
+
+      const normalizeQuiz = (items: unknown): QuizItem[] => {
+        if (!Array.isArray(items)) return [];
+        return items
+          .map((it, idx) => {
+            if (!it || typeof it !== "object") return null;
+            const anyIt = it as Record<string, unknown>;
+            const question = typeof anyIt.question === "string" ? anyIt.question : "";
+            const options = Array.isArray(anyIt.options)
+              ? anyIt.options.map((o) => String(o))
+              : [];
+            const skill =
+              typeof anyIt.skill === "string"
+                ? anyIt.skill
+                : typeof anyIt.skill_tested_on === "string"
+                  ? anyIt.skill_tested_on
+                  : "";
+            if (!question || options.length === 0) return null;
+            return {
+              id: typeof anyIt.id === "number" ? anyIt.id : idx + 1,
+              question,
+              options,
+              skill,
+            } satisfies QuizItem;
+          })
+          .filter((x): x is QuizItem => x !== null);
+      };
+
+      const quiz =
+        (data.quiz && data.quiz.length > 0 ? data.quiz : undefined) ??
+        normalizeQuiz(data.message);
+
+      const intro =
+        quiz.length > 0
+          ? `📝 **Skill Assessment Quiz**\n\nSelect ${quiz.some((q) => isMultiSelectQuestion(q.question)) ? "the correct option(s)" : "the correct option"} for each question.`
+          : "📝 **Skill Assessment Quiz**\n\nNo questions were returned. Please try again.";
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: intro,
+          timestamp: new Date(),
+          quiz: quiz.length > 0 ? quiz : undefined,
+        },
+      ]);
+    } catch (e) {
+      console.error(e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: "Sorry — I couldn’t start the quiz. Please try again.",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   const handleSend = async (text?: string) => {
     const content = text || input.trim();
@@ -190,6 +351,70 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
       }
     } catch (error) {
       console.error("Error sending chat message:", error);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleSubmitQuiz = async (quizMessage: Message) => {
+    if (isTyping) return;
+    const sessionId = localStorage.getItem("session_id");
+    if (!sessionId || !quizMessage.quiz || quizMessage.quiz.length === 0) return;
+
+    const quiz_results = quizMessage.quiz.map((q, qi) => {
+      const selKey = `${quizMessage.id}:${qi}`;
+      const selectedIdx = quizSelections[selKey] ?? [];
+      return {
+        id: q.id,
+        question: q.question,
+        skill_tested_on: q.skill,
+        selected_options: selectedIdx.map((oi) => q.options[oi]).filter(Boolean),
+      };
+    });
+
+    setIsTyping(true);
+    try {
+      const res = await fetch(`${API_BASE}/chat/${encodeURIComponent(sessionId)}/done_quiz`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(quiz_results),
+      });
+      if (!res.ok) {
+        throw new Error(`done_quiz failed (${res.status})`);
+      }
+      const rawData = await res.json();
+      const data = rawData as { session_id?: string | number; message?: string | { message: string }; status?: string };
+      if (data?.session_id != null) {
+        localStorage.setItem("session_id", String(data.session_id));
+      }
+
+      let messageContent = "Quiz submitted.";
+      if (typeof data?.message === "string") {
+        messageContent = data.message;
+      } else if (data?.message && typeof data.message === "object" && "message" in data.message) {
+        messageContent = String(data.message.message);
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: messageContent,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (e) {
+      console.error(e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: "Sorry — I couldn’t submit your quiz. Please try again.",
+          timestamp: new Date(),
+        },
+      ]);
     } finally {
       setIsTyping(false);
     }
@@ -313,13 +538,97 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                   ))}
                 </div>
 
+                {msg.role === "ai" && msg.quiz && msg.quiz.length > 0 && (
+                  <div className="mt-3 space-y-3">
+                    {msg.quiz.map((q, qi) => {
+                      const selKey = `${msg.id}:${qi}`;
+                      const selected = quizSelections[selKey] ?? [];
+                      const multi = isMultiSelectQuestion(q.question);
+                      return (
+                        <div key={selKey} className="rounded-xl border border-border bg-background/40 p-3">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="text-sm font-medium">
+                              {q.id}. {q.question}
+                            </div>
+                            {q.skill && (
+                              <span className="shrink-0 text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
+                                {q.skill}
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid gap-2">
+                            {q.options.map((opt, oi) => {
+                              const isSelected = selected.includes(oi);
+                              return (
+                                <Button
+                                  key={`${selKey}-${oi}`}
+                                  type="button"
+                                  variant={isSelected ? "secondary" : "outline"}
+                                  size="sm"
+                                  className={cn(
+                                    "justify-start whitespace-normal h-auto py-2 text-left",
+                                    isSelected && "ring-1 ring-primary/40"
+                                  )}
+                                  onClick={() => {
+                                    setQuizSelections((prev) => {
+                                      const curr = prev[selKey] ?? [];
+                                      let next: number[];
+                                      if (multi) {
+                                        next = curr.includes(oi) ? curr.filter((x) => x !== oi) : [...curr, oi];
+                                      } else {
+                                        next = [oi];
+                                      }
+                                      return { ...prev, [selKey]: next };
+                                    });
+                                  }}
+                                >
+                                  <span
+                                    className={cn(
+                                      "mr-2 mt-0.5",
+                                      isSelected ? "text-primary" : "text-muted-foreground"
+                                    )}
+                                  >
+                                    {multi ? (isSelected ? "▣" : "▢") : isSelected ? "◉" : "○"}
+                                  </span>
+                                  <span>{opt}</span>
+                                </Button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {(() => {
+                      const allAnswered = msg.quiz.every((_, qi) => {
+                        const selKey = `${msg.id}:${qi}`;
+                        return (quizSelections[selKey] ?? []).length > 0;
+                      });
+
+                      return (
+                        <div className="pt-2 flex justify-end">
+                          <Button
+                            variant="gradient"
+                            size="sm"
+                            type="button"
+                            disabled={!allAnswered || isTyping}
+                            onClick={() => handleSubmitQuiz(msg)}
+                          >
+                            Submit Quiz
+                          </Button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 {msg.role === "ai" &&
-                  /are you ready to start the skill assessment quiz\\?/i.test(msg.content) && (
+                  /are you ready to start the skill assessment quiz\?/i.test(msg.content) && (
                     <div className="mt-3 flex gap-2">
-                      <Button variant="gradient" size="sm" onClick={() => handleSend("Yes")}>
+                      <Button variant="gradient" size="sm" onClick={handleStartQuiz} disabled={isTyping}>
                         Yes
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleSend("No")}>
+                      <Button variant="outline" size="sm" onClick={() => handleSend("No")} disabled={isTyping}>
                         No
                       </Button>
                     </div>
