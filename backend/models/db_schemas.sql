@@ -25,6 +25,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_sessions_status ON chat_sessions(status);
 -- ── CHAT MESSAGES ──────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS chat_messages (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
     session_id BIGINT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
     role       TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content    TEXT NOT NULL,
@@ -32,7 +33,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(user_id, session_id);
 
 -- ── CLAIMED SKILLS ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS claimed_skills (
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS claimed_skills (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_claimed_skills_session ON claimed_skills(session_id);
+CREATE INDEX IF NOT EXISTS idx_claimed_skills_session ON claimed_skills(user_id, session_id);
 CREATE INDEX IF NOT EXISTS idx_claimed_skills_gin     ON claimed_skills USING GIN(skills);
  
 CREATE TABLE IF NOT EXISTS quiz_results (

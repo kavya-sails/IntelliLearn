@@ -1,5 +1,12 @@
 import json
 from typing import Optional, List, Dict, Any
+from models.schemas import (
+    ChatMessage,
+    ChatSession,
+    ClaimedSkills,
+    MessageRole,
+    SessionStatus,
+)
 from database import get_db_connection, get_cursor
 
 
@@ -11,7 +18,6 @@ def save_user(name: str, email: str, password: str) -> Dict[str, Any]:
                 """INSERT INTO users (name, email, password)
                    VALUES (%s, %s, %s)
                    RETURNING *""",
-                # Provide all placeholders: (name, email, password)
                 (name, email, password),
             )
             return dict(cur.fetchone())
@@ -26,7 +32,7 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
             return dict(row) if row else None
 
 
-def create_session(user_id: str = "1") -> Dict[str, Any]:
+def create_session(user_id: int) -> ChatSession:
     """Create a new chat session"""
     with get_db_connection() as conn:
         with get_cursor(conn) as cur:
@@ -36,35 +42,45 @@ def create_session(user_id: str = "1") -> Dict[str, Any]:
                    RETURNING *""",
                 (user_id,),
             )
-            return dict(cur.fetchone())
+            session_dict = dict(cur.fetchone())
+            return ChatSession.model_validate(session_dict)
 
 
-def get_session(session_id: str) -> Optional[Dict[str, Any]]:
+def get_session(user_id: int, session_id: int) -> Optional[ChatSession]:
     """Get session by ID"""
     with get_db_connection() as conn:
         with get_cursor(conn) as cur:
-            cur.execute("SELECT * FROM chat_sessions WHERE id = %s", (session_id,))
+            cur.execute(
+                "SELECT * FROM chat_sessions WHERE id = %s AND user_id = %s",
+                (session_id, user_id),
+            )
             row = cur.fetchone()
-            return dict(row) if row else None
+            return ChatSession.model_validate(dict(row)) if row else None
 
 
-def update_session_status(session_id: str, status: str) -> Dict[str, Any]:
+def update_session_status(
+    user_id: int, session_id: int, status: SessionStatus
+) -> ChatSession:
     """Update session status"""
     with get_db_connection() as conn:
         with get_cursor(conn) as cur:
             cur.execute(
                 """UPDATE chat_sessions 
                    SET status = %s, updated_at = now()
-                   WHERE id = %s
+                   WHERE id = %s AND user_id = %s
                    RETURNING *""",
-                (status, session_id),
+                (status, session_id, user_id),
             )
-            return dict(cur.fetchone())
+            return ChatSession.model_validate(dict(cur.fetchone()))
 
 
 def save_chat_message(
-    session_id: str, role: str, content: str, meta: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    user_id: int,
+    session_id: int,
+    role: MessageRole,
+    content: str,
+    meta: Optional[Dict[str, Any]] = None,
+) -> ChatMessage:
     """Save a chat message to the database"""
     if meta is None:
         meta = {}
@@ -72,33 +88,34 @@ def save_chat_message(
     with get_db_connection() as conn:
         with get_cursor(conn) as cur:
             cur.execute(
-                """INSERT INTO chat_messages (session_id, role, content, meta)
-                   VALUES (%s, %s, %s, %s::jsonb)
+                """INSERT INTO chat_messages (user_id, session_id, role, content, meta)
+                   VALUES (%s, %s, %s, %s, %s::jsonb)
                    RETURNING *""",
-                (session_id, role, content, json.dumps(meta)),
+                (user_id, session_id, role, content, json.dumps(meta)),
             )
-            return dict(cur.fetchone())
+            return ChatMessage.model_validate(dict(cur.fetchone()))
 
 
-def get_chat_history(session_id: str) -> List[Dict[str, Any]]:
+def get_chat_history(user_id: int, session_id: int) -> List[ChatMessage]:
     """Get all chat messages for a session"""
     with get_db_connection() as conn:
         with get_cursor(conn) as cur:
             cur.execute(
                 """SELECT * FROM chat_messages 
-                   WHERE session_id = %s 
+                   WHERE session_id = %s AND user_id = %s
                    ORDER BY created_at ASC""",
-                (session_id,),
+                (session_id, user_id),
             )
-            return [dict(row) for row in cur.fetchall()]
+            return [ChatMessage.model_validate(dict(row)) for row in cur.fetchall()]
 
 
-def get_claimed_skills(session_id: str) -> Optional[Dict[str, Any]]:
+def get_claimed_skills(user_id: int, session_id: int) -> Optional[ClaimedSkills]:
     """Get claimed skills for a session"""
     with get_db_connection() as conn:
         with get_cursor(conn) as cur:
             cur.execute(
-                "SELECT * FROM claimed_skills WHERE session_id = %s", (session_id,)
+                "SELECT * FROM claimed_skills WHERE session_id = %s AND user_id = %s",
+                (session_id, user_id),
             )
             row = cur.fetchone()
-            return dict(row) if row else None
+            return ClaimedSkills.model_validate(dict(row)) if row else None

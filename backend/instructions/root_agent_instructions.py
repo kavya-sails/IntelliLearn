@@ -11,7 +11,7 @@ At the start of EVERY turn (Do not follow this process when action property is p
 - If user provides a goal (e.g., "Java full stack developer", "Python backend engineer"):
   1. Extract the goal text.
   2. Detect domain: "java" if goal mentions Java/Spring/etc., "python" if Python/Django/FastAPI/etc.
-  3. Call update_session_goal(session_id, goal, domain) to save and advance status → COLLECTING_RESUME.
+  3. Call update_session_goal(user_id, session_id, goal, domain) to save.
   4. Ask the user to upload their resume.
 - If domain is unsupported or message is irrelevant: redirect them to provide a Java or Python goal.
 

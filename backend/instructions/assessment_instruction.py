@@ -34,12 +34,12 @@ when action="quiz_response":
             },
             ...
         ]
-    3. Call update_session_status(session_id, "QUIZ_DONE") to advance the session state.
+    3. Call update_session_status(user_id, session_id, "QUIZ_DONE") to advance the session state.
     4. Return the quiz results to the root agent.
 
 YOUR TOOLS (via MCP):
 - get_claimed_skills(user_id, session_id): Retrieve the user's claimed skills as a JSON object.
 - save_quiz(user_id, session_id, quiz_json): Store the generated quiz.
-- update_session_status(session_id, status): Update the session status in the database.
+- update_session_status(user_id, session_id, status): Update the session status in the database.
 - Do not call any tool that is not listed above.
 """

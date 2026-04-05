@@ -18,7 +18,9 @@ from services.db_service import (
 from models.schemas import (
     ChatMessageRequest,
     ChatMessageResponse,
+    MessageRole,
     SessionCreateResponse,
+    SessionStatus,
     UserCreate,
     UserResponse,
 )
@@ -36,7 +38,7 @@ async def health_check():
 async def register_user(request: UserCreate):
     user = save_user(request.name, request.email, request.password)
     return UserResponse(
-        id=str(user["id"]),
+        id=user["id"],
         name=user["name"],
         email=user["email"],
         created_at=user["created_at"],
@@ -54,12 +56,12 @@ async def login_user(email: str, password: str):
 
 
 @router.post("/chat/new", response_model=SessionCreateResponse)
-async def create_new_chat(user_id: int = 1):
+async def create_new_chat(user_id: int):
     session = create_session(user_id)
 
     return SessionCreateResponse(
-        session_id=str(session["id"]),
-        status=session["status"],
+        session_id=session.id,
+        status=session.status,
         message="New chat session created. Please share your career goal!",
     )
 
@@ -69,25 +71,23 @@ async def send_message(request: ChatMessageRequest):
     try:
         session_id = request.session_id
         user_message = request.message
-        user_id = request.user_id or 1
+        user_id = request.user_id
 
         if not session_id:
             session = create_session(user_id)
-            session_id = session["id"]
+            session_id = session.id
         else:
-            session = get_session(session_id)
+            session = get_session(user_id, session_id)
             if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
 
-        save_chat_message(session_id, "user", user_message)
+        save_chat_message(user_id, session_id, MessageRole.USER, user_message)
 
         prompt = {
             "session_id": session_id,
-            "user_id": session.get("user_id", 1),
+            "user_id": session.user_id,
             "user_message": user_message,
-            "current_status": session["status"],
-            # "goal": session.get("goal"),
-            # "domain": session.get("domain"),
+            "current_status": session.status,
         }
 
         agent_response = await run_agent(prompt, user_id, session_id)
@@ -96,23 +96,23 @@ async def send_message(request: ChatMessageRequest):
             "message", str(agent_response["reply"])
         )
 
-        save_chat_message(session_id, "assistant", reply_text)
+        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
 
-        updated_session = get_session(session_id)
+        updated_session = get_session(user_id, session_id)
 
-        meta = None
-        if updated_session["status"] == "AWAITING_QUIZ":
-            skills = get_claimed_skills(session_id)
-            if skills:
-                meta = {
-                    "skills": skills["skills"],
-                }
+        # meta = None
+        # if updated_session["status"] == "AWAITING_QUIZ":
+        #     skills = get_claimed_skills(user_id, session_id)
+        #     if skills:
+        #         meta = {
+        #             "skills": skills.skills,
+        #         }
 
         return ChatMessageResponse(
             session_id=session_id,
             message=reply_text,
-            status=updated_session["status"],
-            meta=meta,
+            status=updated_session.status,
+            # meta=meta,
         )
 
     except Exception as e:
@@ -120,21 +120,15 @@ async def send_message(request: ChatMessageRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/chat/upload-resume")
-async def upload_resume(session_id: str, file: UploadFile = File(...)):
+@router.post("/chat/{user_id}/{session_id}/upload-resume")
+async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(...)):
     """
     Upload resume PDF and trigger skill parsing
     """
     try:
-        session = get_session(session_id)
+        session = get_session(user_id, session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-
-        if session["status"] not in ["COLLECTING_GOAL", "COLLECTING_RESUME"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot upload resume in current state: {session['status']}",
-            )
 
         if not file.filename.endswith(".pdf"):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
@@ -158,101 +152,100 @@ async def upload_resume(session_id: str, file: UploadFile = File(...)):
             )
 
         save_chat_message(
+            user_id,
             session_id,
-            "user",
+            MessageRole.USER,
             f"[Uploaded resume: {file.filename}]",
             meta={"had_file": True, "filename": file.filename},
         )
-        original_status = session["status"]
-        update_session_status(session_id, "PARSING_SKILLS")
+        original_status = session.status
+        update_session_status(user_id, session_id, SessionStatus.PARSING_SKILLS)
 
         prompt = {
             "session_id": session_id,
-            "user_id": session.get("user_id", 1),
+            "user_id": session.user_id,
             "action": "parse_skills",
             "resume_text": resume_text,
-            "current_status": "PARSING_SKILLS",
-            "domain": session.get("domain"),
+            "domain": session.domain,
         }
 
-        agent_response = await run_agent(prompt, session.get("user_id", 1), session_id)
+        agent_response = await run_agent(prompt, session.user_id, session_id)
         logger.info(f"Agent response after resume upload: {agent_response}")
-        skills = get_claimed_skills(session_id)
+        skills = get_claimed_skills(user_id, session_id)
         if skills:
-            update_session_status(session_id, "AWAITING_QUIZ")
+            update_session_status(user_id, session_id, SessionStatus.AWAITING_QUIZ)
 
         reply_data = agent_response.get("reply", [])
-        if isinstance(reply_data, list):
-            reply_text = " ".join(str(item) for item in reply_data)
-        elif isinstance(reply_data, dict):
+        if isinstance(reply_data, dict):
             reply_text = reply_data.get(
                 "message", "Resume analyzed! Here are your extracted skills."
             )
         else:
             reply_text = str(reply_data)
-        save_chat_message(session_id, "assistant", reply_text)
+        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
 
-        updated_session = get_session(session_id)
+        updated_session = get_session(user_id, session_id)
 
         return {
             "session_id": session_id,
             "message": reply_text,
-            "status": updated_session["status"],
-            "skills": skills["skills"] if skills else [],
+            "status": updated_session.status,
+            "skills": skills.skills if skills else [],
         }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.exception(f"Error in upload_resume: {e}")
-        update_session_status(session_id, original_status)
+        update_session_status(user_id, session_id, original_status)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/chat/{session_id}/history")
-async def get_history(session_id: str):
+@router.get("/chat/{user_id}/{session_id}/history")
+async def get_history(user_id: int, session_id: int):
     """
     Get chat history for a session
     """
-    session = get_session(session_id)
+    session = get_session(user_id, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    messages = get_chat_history(session_id)
+    messages = get_chat_history(user_id, session_id)
 
     return {
         "session_id": session_id,
-        "status": session["status"],
-        "goal": session.get("goal"),
-        "domain": session.get("domain"),
+        "status": session.status,
+        "goal": session.goal,
+        "domain": session.domain,
         "messages": messages,
     }
 
 
-@router.get("/chat/{session_id}/skills")
-async def get_skills(session_id: str):
+@router.get("/chat/{user_id}/{session_id}/skills")
+async def get_skills(user_id: int, session_id: int):
     """
     Get extracted skills for a session
     """
-    session = get_session(session_id)
+    session = get_session(user_id, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    skills = get_claimed_skills(session_id)
+    skills = get_claimed_skills(user_id, session_id)
 
     if not skills:
         return {"session_id": session_id, "skills": [], "skill_count": 0}
 
     return {"session_id": session_id, "skills": skills["skills"]}
 
-@router.post("/chat/{session_id}/start_quiz")
-async def start_quiz(session_id: str):
+
+@router.post("/chat/{user_id}/{session_id}/start_quiz")
+async def start_quiz(user_id: int, session_id: int):
     try:
-        session = get_session(session_id)
+        session = get_session(user_id, session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        if session["status"] != "AWAITING_QUIZ":
+        if session.status != SessionStatus.AWAITING_QUIZ:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot start quiz in current state: {session['status']}",
@@ -260,25 +253,24 @@ async def start_quiz(session_id: str):
 
         # Save user action in chat history
         save_chat_message(
+            user_id,
             session_id,
-            "user",
+            MessageRole.USER,
             "[User started quiz]",
             meta={"action": "generate_quiz"},
         )
 
-        original_status = session["status"]
-        update_session_status(session_id, "QUIZ_IN_PROGRESS")
+        original_status = session.status
+        update_session_status(user_id, session_id, SessionStatus.QUIZ_IN_PROGRESS)
 
         prompt = {
             "session_id": session_id,
-            "user_id": session.get("user_id", 1),
+            "user_id": user_id,
             "action": "generate_quiz",
-            "current_status": "QUIZ_IN_PROGRESS"
+            "current_status": SessionStatus.QUIZ_IN_PROGRESS,
         }
 
-        agent_response = await run_agent(
-            prompt, session.get("user_id", 1), session_id
-        )
+        agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting quiz: {agent_response}")
         reply_data = agent_response.get("reply", [])
         if isinstance(reply_data, list):
@@ -291,7 +283,7 @@ async def start_quiz(session_id: str):
             reply_text = str(reply_data)
 
         # Save assistant response
-        save_chat_message(session_id, "assistant", reply_text)
+        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
 
         return {
             "session_id": session_id,
@@ -303,26 +295,30 @@ async def start_quiz(session_id: str):
         raise
     except Exception as e:
         logger.exception(f"Error in start_quiz: {e}")
-        update_session_status(session_id, original_status)
+        update_session_status(user_id, session_id, original_status)
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/chat/{session_id}/done_quiz")
-async def done_quiz(session_id: str, quiz_results: List[dict] = Body(...)):
+
+@router.post("/chat/{user_id}/{session_id}/done_quiz")
+async def done_quiz(
+    user_id: int, session_id: int, quiz_results: List[dict] = Body(...)
+):
     try:
-        session = get_session(session_id)
+        session = get_session(user_id, session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        if session["status"] != "QUIZ_IN_PROGRESS":
+        if session.status != SessionStatus.QUIZ_IN_PROGRESS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot submit quiz in current state: {session['status']}",
+                detail=f"Cannot submit quiz in current state: {session.status}",
             )
 
         # Save quiz results in chat history
         save_chat_message(
+            user_id,
             session_id,
-            "user",
+            MessageRole.USER,
             "[User completed quiz]",
             meta={
                 "action": "quiz_response",
@@ -333,14 +329,12 @@ async def done_quiz(session_id: str, quiz_results: List[dict] = Body(...)):
         # Send results to agent for gap analysis
         prompt = {
             "session_id": session_id,
-            "user_id": session.get("user_id", 1),
+            "user_id": user_id,
             "action": "quiz_response",
-            "quiz_results": quiz_results
+            "quiz_results": quiz_results,
         }
 
-        agent_response = await run_agent(
-            prompt, session.get("user_id", 1), session_id
-        )
+        agent_response = await run_agent(prompt, user_id, session_id)
 
         logger.info(f"Agent response after quiz submission: {agent_response}")
 
@@ -356,13 +350,13 @@ async def done_quiz(session_id: str, quiz_results: List[dict] = Body(...)):
             reply_text = str(reply_data)
 
         # Save assistant response
-        save_chat_message(session_id, "assistant", reply_text)
-        updated_session = get_session(session_id)
+        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
+        updated_session = get_session(user_id, session_id)
 
         return {
             "session_id": session_id,
             "message": reply_data,
-            "status": updated_session["status"],
+            "status": updated_session.status,
         }
 
     except HTTPException:
@@ -370,22 +364,24 @@ async def done_quiz(session_id: str, quiz_results: List[dict] = Body(...)):
     except Exception as e:
         logger.exception(f"Error in done_quiz: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
-@router.post("/chat/{session_id}/analyze_gaps")
-async def analyze_gaps(session_id: str):
+
+
+@router.post("/chat/{user_id}/{session_id}/analyze_gaps")
+async def analyze_gaps(user_id: int, session_id: int):
     try:
-        session = get_session(session_id)
+        session = get_session(user_id, session_id)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        if session["status"] != "QUIZ_DONE":
+        if session.status != SessionStatus.QUIZ_DONE:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot start gap analysis in current state: {session['status']}",
+                detail=f"Cannot start gap analysis in current state: {session.status}",
             )
 
         # Save user action in chat history
         save_chat_message(
+            user_id,
             session_id,
             "user",
             "[User started gap analysis]",
@@ -394,14 +390,12 @@ async def analyze_gaps(session_id: str):
 
         prompt = {
             "session_id": session_id,
-            "user_id": session.get("user_id", 1),
+            "user_id": user_id,
             "action": "analyze_gaps",
-            "goal": session.get("goal")
+            "goal": session.get("goal"),
         }
 
-        agent_response = await run_agent(
-            prompt, session.get("user_id", 1), session_id
-        )
+        agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting gap analysis: {agent_response}")
         reply_data = agent_response.get("reply", [])
         if isinstance(reply_data, list):
@@ -414,13 +408,13 @@ async def analyze_gaps(session_id: str):
             reply_text = str(reply_data)
 
         # Save assistant response
-        save_chat_message(session_id, "assistant", reply_text)
-        updated_session = get_session(session_id)
+        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
+        updated_session = get_session(user_id, session_id)
 
         return {
             "session_id": session_id,
             "message": reply_data,
-            "status": updated_session["status"],
+            "status": updated_session.status,
         }
 
     except HTTPException:

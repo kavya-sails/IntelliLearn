@@ -26,23 +26,9 @@ mcp = FastMCP(name="intellilearn-mcp")
 
 
 @mcp.tool()
-def get_session_status(session_id: str, user_id: str) -> dict:
+def get_session_status(session_id: int, user_id: int) -> dict:
     """
-    Fetch the current status, goal, and domain for a session.
-
-    Args:
-        session_id: ID of the chat session (will be converted to int)
-        user_id:    ID of the user who owns the session (will be converted to int)
-
-    Returns:
-        {
-          "session_id": int,
-          "user_id": int,
-          "status": str,   # e.g. COLLECTING_GOAL, COLLECTING_RESUME, AWAITING_QUIZ, ...
-          "goal": str | None,
-          "domain": str | None
-        }
-        or {"error": "Session not found"} if no matching row exists.
+    Fetch the current status for a session.
     """
     conn = _conn()
     try:
@@ -51,7 +37,7 @@ def get_session_status(session_id: str, user_id: str) -> dict:
                 """SELECT id AS session_id, user_id, status, goal, domain
                    FROM chat_sessions
                    WHERE id = %s AND user_id = %s""",
-                (int(session_id), int(user_id)),
+                (session_id, user_id),
             )
             row = cur.fetchone()
             if row is None:
@@ -62,17 +48,9 @@ def get_session_status(session_id: str, user_id: str) -> dict:
 
 
 @mcp.tool()
-def update_session_goal(session_id: str, goal: str, domain: str) -> dict:
+def update_session_goal(user_id: int, session_id: int, goal: str, domain: str) -> dict:
     """
     Set the user's goal and detected domain on the session.
-    Also advances status from COLLECTING_GOAL → COLLECTING_RESUME.
-
-    Args:
-        session_id: ID of the chat session (will be converted to int)
-        goal:       User's stated goal, e.g. "Senior Python Backend Engineer"
-        domain:     Must be exactly "java" or "python"
-
-    Returns: updated session dict
     """
     if domain not in ("java", "python"):
         raise ValueError("domain must be 'java' or 'python'")
@@ -82,8 +60,8 @@ def update_session_goal(session_id: str, goal: str, domain: str) -> dict:
             cur.execute(
                 """UPDATE chat_sessions
                    SET goal = %s, domain = %s, status = 'COLLECTING_RESUME'
-                   WHERE id = %s RETURNING *""",
-                (goal, domain, int(session_id)),
+                   WHERE id = %s AND user_id = %s RETURNING *""",
+                (goal, domain, session_id, user_id),
             )
             return dict(cur.fetchone())
     finally:
@@ -91,12 +69,9 @@ def update_session_goal(session_id: str, goal: str, domain: str) -> dict:
 
 
 @mcp.tool()
-def update_session_status(session_id: str, status: str) -> dict:
+def update_session_status(user_id: int, session_id: int, status: str) -> dict:
     """
     Advance the session to a new status.
-    Valid values: COLLECTING_GOAL, COLLECTING_RESUME, PARSING_SKILLS,
-                  AWAITING_QUIZ, QUIZ_IN_PROGRESS, QUIZ_DONE, GAP_DONE, ROADMAP_READY
-    Returns: updated session dict
     """
     valid = {
         "COLLECTING_GOAL",
@@ -114,8 +89,8 @@ def update_session_status(session_id: str, status: str) -> dict:
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "UPDATE chat_sessions SET status=%s WHERE id=%s RETURNING *",
-                (status, int(session_id)),
+                "UPDATE chat_sessions SET status=%s WHERE id=%s AND user_id=%s RETURNING *",
+                (status, session_id, user_id),
             )
             return dict(cur.fetchone())
     finally:
@@ -123,17 +98,15 @@ def update_session_status(session_id: str, status: str) -> dict:
 
 
 @mcp.tool()
-def save_claimed_skills(user_id: str, session_id: str, skills_json: str) -> dict:
+def save_claimed_skills(user_id: int, session_id: int, skills_json: str) -> dict:
     """
     Upsert extracted skills for a session.
-
     Args:
-        user_id:     ID of the user (will be converted to int)
-        session_id:  ID of the chat session (will be converted to int)
+        user_id:     ID of the user
+        session_id:  ID of the chat session
         skills_json: JSON array string. Each element:
                        {"skill_name": "FastAPI", "level": "advanced"}
                      level must be: beginner | intermediate | advanced
-
     Returns: {session_id, skill_count, skills}
     """
     try:
@@ -163,7 +136,7 @@ def save_claimed_skills(user_id: str, session_id: str, skills_json: str) -> dict
                    ON CONFLICT (session_id)
                    DO UPDATE SET skills=EXCLUDED.skills, updated_at=now()
                    RETURNING *""",
-                (int(user_id), int(session_id), json.dumps(skills)),
+                (user_id, session_id, json.dumps(skills)),
             )
             row = dict(cur.fetchone())
             return {
@@ -176,30 +149,25 @@ def save_claimed_skills(user_id: str, session_id: str, skills_json: str) -> dict
 
 
 @mcp.tool()
-def get_claimed_skills(user_id: str, session_id: str) -> Optional[dict]:
+def get_claimed_skills(user_id: int, session_id: int) -> Optional[dict]:
     """Retrieve claimed skills row for a session. Returns None if not found."""
     conn = _conn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM claimed_skills WHERE user_id=%s AND session_id=%s", (int(user_id), int(session_id))
+                "SELECT * FROM claimed_skills WHERE user_id=%s AND session_id=%s",
+                (user_id, session_id),
             )
             row = cur.fetchone()
             return dict(row) if row else None
     finally:
         conn.close()
 
+
 @mcp.tool()
-def save_quiz(user_id: str, session_id: str, quiz_json: str) -> dict:
+def save_quiz(user_id: int, session_id: int, quiz_json: str) -> dict:
     """
     Save the generated quiz for a session.
-
-    Args:
-        user_id:  ID of the user (will be converted to int)
-        session_id: ID of the chat session (will be converted to int)
-        quiz_json: JSON array string. Each element:
-                    {"question": "What is FastAPI?", "options": ["A", "B", "C"], "answer": "A", "user_response": "A", "skill_tested_on": "FastAPI"}
-
     Returns: {session_id, quiz_saved: bool}
     """
     try:
@@ -219,9 +187,8 @@ def save_quiz(user_id: str, session_id: str, quiz_json: str) -> dict:
                    ON CONFLICT (session_id)
                    DO UPDATE SET quiz=EXCLUDED.quiz
                    RETURNING *""",
-                (int(user_id), int(session_id), json.dumps(quiz)),
+                (user_id, session_id, json.dumps(quiz)),
             )
-            row = dict(cur.fetchone())
             return {
                 "session_id": session_id,
                 "quiz_saved": True,
@@ -229,29 +196,27 @@ def save_quiz(user_id: str, session_id: str, quiz_json: str) -> dict:
     finally:
         conn.close()
 
+
 @mcp.tool()
-def get_quiz_results(user_id: str, session_id: str) -> Optional[dict]:
+def get_quiz_results(user_id: int, session_id: int) -> Optional[dict]:
     """Retrieve quiz results for a session. Returns None if not found."""
     conn = _conn()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM assessments WHERE user_id=%s AND session_id=%s", (int(user_id), int(session_id))
+                "SELECT * FROM assessments WHERE user_id=%s AND session_id=%s",
+                (user_id, session_id),
             )
             row = cur.fetchone()
             return dict(row) if row else None
     finally:
         conn.close()
-    
+
+
 @mcp.tool()
-def save_gap_analysis(user_id: str, session_id: str, gap_analysis_json: str) -> dict:
+def save_gap_analysis(user_id: int, session_id: int, gap_analysis_json: str) -> dict:
     """
     Save the generated gap analysis report for a session.
-
-    Args:
-        user_id:  ID of the user (will be converted to int)
-        session_id: ID of the chat session (will be converted to int)
-        gap_analysis_json: JSON object string containing the gap analysis report
     Returns: {session_id, gap_analysis_saved: bool}
     """
     try:
@@ -268,16 +233,15 @@ def save_gap_analysis(user_id: str, session_id: str, gap_analysis_json: str) -> 
                    ON CONFLICT (session_id)
                    DO UPDATE SET analysis=EXCLUDED.analysis
                    RETURNING *""",
-                (int(user_id), int(session_id), json.dumps(gap_analysis)),
+                (user_id, session_id, json.dumps(gap_analysis)),
             )
-            row = dict(cur.fetchone())
             return {
                 "session_id": session_id,
                 "gap_analysis_saved": True,
             }
     finally:
-        conn.close()    
+        conn.close()
 
-        
+
 if __name__ == "__main__":
     mcp.run()

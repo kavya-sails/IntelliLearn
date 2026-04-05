@@ -37,27 +37,28 @@ class Skill(BaseModel):
 
 
 class ChatMessageRequest(BaseModel):
-    session_id: Optional[str] = None
+    session_id: Optional[int] = None
     message: str
-    user_id: Optional[str] = "1"
+    user_id: Optional[int] = None
 
 
 class ChatMessageResponse(BaseModel):
-    session_id: str
+    session_id: int
     message: str
     status: SessionStatus
     meta: Optional[Dict[str, Any]] = None
 
 
 class SessionCreateResponse(BaseModel):
-    session_id: str
+    session_id: int
     status: SessionStatus
     message: str
 
 
 class ChatMessage(BaseModel):
-    id: str
-    session_id: str
+    id: int
+    user_id: int
+    session_id: int
     role: MessageRole
     content: str
     meta: Optional[Dict[str, Any]] = {}
@@ -65,8 +66,8 @@ class ChatMessage(BaseModel):
 
 
 class ChatSession(BaseModel):
-    id: str
-    user_id: Optional[str]
+    id: int
+    user_id: Optional[int]
     status: SessionStatus
     goal: Optional[str]
     domain: Optional[Domain]
@@ -82,15 +83,16 @@ class UserCreate(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: int
     name: str
     email: str
     created_at: datetime
 
 
 class ClaimedSkills(BaseModel):
-    id: str
-    session_id: str
+    id: int
+    user_id: int
+    session_id: int
     skills: List[Skill]
     source: str
     created_at: datetime

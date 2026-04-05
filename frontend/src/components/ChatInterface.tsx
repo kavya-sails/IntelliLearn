@@ -62,8 +62,9 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
 
   useEffect(() => {
     const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
     if (sessionId) {
-      fetch(`${API_BASE}/chat/${sessionId}/history`)
+      fetch(`${API_BASE}/chat/${userId}/${sessionId}/history`)
         .then((res) => res.json())
         .then((data) => {
           if (data.messages && data.messages.length > 0) {
@@ -158,6 +159,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   const handleStartQuiz = async () => {
     if (isTyping) return;
     const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
     if (!sessionId) return;
 
     setMessages((prev) => [
@@ -171,7 +173,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
     ]);
     setIsTyping(true);
     try {
-      const res = await fetch(`${API_BASE}/chat/${encodeURIComponent(sessionId)}/start_quiz`, {
+      const res = await fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/start_quiz`, {
         method: "POST",
       });
       if (!res.ok) {
@@ -359,6 +361,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   const handleSubmitQuiz = async (quizMessage: Message) => {
     if (isTyping) return;
     const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
     if (!sessionId || !quizMessage.quiz || quizMessage.quiz.length === 0) return;
 
     const quiz_results = quizMessage.quiz.map((q, qi) => {
@@ -374,7 +377,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
 
     setIsTyping(true);
     try {
-      const res = await fetch(`${API_BASE}/chat/${encodeURIComponent(sessionId)}/done_quiz`, {
+      const res = await fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/done_quiz`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(quiz_results),
@@ -422,6 +425,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
 
   const uploadResumeToBackend = async (file: File) => {
     const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
     if (!sessionId) {
       console.error("No session_id in localStorage; cannot upload resume.");
       return;
@@ -430,7 +434,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch(`${API_BASE}/chat/upload-resume?session_id=${encodeURIComponent(sessionId)}`, {
+    const res = await fetch(`${API_BASE}/chat/${userId}/${sessionId}/upload-resume`, {
       method: "POST",
       body: formData,
     });

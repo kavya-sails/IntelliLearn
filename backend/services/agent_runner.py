@@ -23,9 +23,9 @@ def strip_markdown_json(text: str) -> str:
     return text
 
 
-async def run_agent(prompt: dict, user_id: str = "1", session_id: str | None = None):
+async def run_agent(prompt: dict, user_id: int, session_id: int | None = None):
     user_id = str(user_id)
-    session_id = session_id or str(uuid.uuid4())
+    session_id = str(session_id) or str(uuid.uuid4())
 
     logger.info(
         f"kavya Running agent | user_id={user_id} | session_id={session_id} | prompt={prompt}"
