@@ -15,6 +15,7 @@ from services.db_service import (
     get_chat_history,
     update_session_status,
     get_claimed_skills,
+    get_gap_analysis,
     save_user,
     get_sessions_by_user,
 )
@@ -404,3 +405,28 @@ async def run_gap_analysis(
 
     except Exception as e:
         logger.exception(f"Error in background gap analysis: {e}")
+
+@router.get("/chat/{user_id}/{session_id}/gap_analysis")
+async def get_gap_analysis_for_session(user_id: int, session_id: int):
+    """
+    Retrieve the saved gap analysis for a session from the gap_analysis table.
+    """
+    session = get_session(user_id, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status != SessionStatus.GAP_DONE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot fetch gap analysis in current state: {session.status}",
+        )
+
+    row = get_gap_analysis(user_id, session_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Gap analysis not found")
+
+    return {
+        "session_id": session_id,
+        "analysis": row.get("analysis", {}),
+        "created_at": row.get("created_at"),
+    }

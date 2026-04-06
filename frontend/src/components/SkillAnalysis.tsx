@@ -1,151 +1,480 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BarChart3, Sparkles } from "lucide-react";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Tooltip,
+  Legend,
+  type ChartOptions,
+  type TooltipItem,
+} from "chart.js";
+import { Bar } from "react-chartjs-2";
 import { cn } from "@/lib/utils";
 
-const skillData = [
-  { name: "Java", score: 85, level: "strong" },
-  { name: "Spring Boot", score: 70, level: "medium" },
-  { name: "SQL", score: 78, level: "strong" },
-  { name: "React", score: 45, level: "weak" },
-  { name: "System Design", score: 35, level: "weak" },
-  { name: "Docker", score: 60, level: "medium" },
-  { name: "AWS", score: 40, level: "weak" },
-  { name: "Git", score: 90, level: "strong" },
-  { name: "REST APIs", score: 82, level: "strong" },
-  { name: "Multithreading", score: 30, level: "weak" },
-];
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-const getColor = (level: string) => {
-  switch (level) {
-    case "strong": return "hsl(145, 65%, 42%)";
-    case "medium": return "hsl(40, 95%, 55%)";
-    case "weak": return "hsl(0, 72%, 55%)";
-    default: return "hsl(234, 85%, 60%)";
-  }
+const API_BASE = "http://localhost:8000/api";
+
+type SkillGapSkill = {
+  name: string;
+  score: number; // 0-100
+  status: "strength" | "missing" | "medium" | string;
 };
 
-const getLevelIcon = (level: string) => {
-  switch (level) {
-    case "strong": return TrendingUp;
-    case "medium": return Minus;
-    case "weak": return TrendingDown;
-    default: return Minus;
-  }
+export type SkillGapAnalysisData = {
+  overall_score: number; // 0-100
+  skills: SkillGapSkill[];
+  strengths?: string[];
+  weaknesses?: string[];
+  missing_skills?: string[];
+  overestimated_skills?: string[];
+  goal?: string;
+  readiness_level?: string;
 };
 
-const SkillAnalysis = () => {
-  const strong = skillData.filter((s) => s.level === "strong");
-  const medium = skillData.filter((s) => s.level === "medium");
-  const weak = skillData.filter((s) => s.level === "weak");
+const DEMO_DATA: SkillGapAnalysisData = {
+  overall_score: 64,
+  skills: [
+    { name: "Java", score: 100, status: "strength" },
+    { name: "Spring Boot", score: 100, status: "strength" },
+    { name: "Hibernate", score: 100, status: "strength" },
+    { name: "MySQL", score: 100, status: "strength" },
+    { name: "Git", score: 100, status: "strength" },
+    { name: "REST APIs", score: 0, status: "missing" },
+    { name: "HTML", score: 0, status: "missing" },
+    { name: "CSS", score: 0, status: "missing" },
+    { name: "JavaScript", score: 0, status: "missing" },
+    { name: "Docker", score: 0, status: "missing" },
+    { name: "Unit Testing", score: 0, status: "missing" },
+    { name: "Cloud", score: 0, status: "missing" },
+  ],
+  strengths: ["Java", "Spring Boot", "Hibernate", "MySQL", "Git"],
+  weaknesses: ["CSS", "JavaScript"],
+  missing_skills: ["REST APIs", "HTML", "Docker", "Unit Testing", "Cloud"],
+  overestimated_skills: ["AWS"],
+  goal: "Backend Engineer",
+  readiness_level: "medium",
+};
+
+function clampScore(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+function readinessLabel(score: number) {
+  if (score >= 80) return { text: "High Readiness", tone: "success" as const };
+  if (score >= 40) return { text: "Medium Readiness", tone: "warning" as const };
+  return { text: "Low Readiness", tone: "destructive" as const };
+}
+
+function toneClasses(tone: "strength" | "medium" | "missing") {
+  return cn(
+    "text-xs px-2.5 py-1 rounded-full font-medium",
+    tone === "strength" && "bg-success/10 text-success",
+    tone === "medium" && "bg-warning/10 text-warning",
+    tone === "missing" && "bg-destructive/10 text-destructive"
+  );
+}
+
+function pillToneClasses(tone: "strength" | "weakness" | "missing" | "overestimated") {
+  return cn(
+    "text-xs px-2.5 py-1 rounded-full font-medium",
+    tone === "strength" && "bg-success/10 text-success",
+    tone === "weakness" && "bg-warning/10 text-warning",
+    tone === "missing" && "bg-destructive/10 text-destructive",
+    tone === "overestimated" && "bg-primary/10 text-primary"
+  );
+}
+
+function toneColor(score: number) {
+  if (score >= 80) return "hsl(145, 65%, 42%)"; // green
+  if (score >= 40) return "hsl(40, 95%, 55%)"; // yellow
+  return "hsl(0, 72%, 55%)"; // red
+}
+
+function ProgressBar({ value }: { value: number }) {
+  const v = clampScore(value);
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-medium">Overall Readiness Score</div>
+        <div className="text-sm font-semibold">{v}%</div>
+      </div>
+      <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${v}%`, backgroundColor: toneColor(v) }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function CategoryList({
+  title,
+  tone,
+  items,
+}: {
+  title: string;
+  tone: "strength" | "weakness" | "missing" | "overestimated";
+  items: string[];
+}) {
+  return (
+    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-semibold">{title}</h3>
+        <span className={pillToneClasses(tone)}>{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing here yet.</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {items.map((name) => (
+            <div
+              key={name}
+              className="group flex items-center gap-2 rounded-full border border-border bg-background/40 px-3 py-1.5 hover:shadow-sm transition"
+            >
+              <span className={pillToneClasses(tone)}>
+                {tone === "strength"
+                  ? "Strength"
+                  : tone === "weakness"
+                    ? "Weakness"
+                    : tone === "overestimated"
+                      ? "Overestimated"
+                      : "Missing"}
+              </span>
+              <span className="text-sm font-medium">{name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InsightText({ data }: { data: SkillGapAnalysisData }) {
+  const strengths = (data.strengths && data.strengths.length > 0) ? data.strengths : [];
+  const missing = (data.missing_skills && data.missing_skills.length > 0) ? data.missing_skills : [];
+
+  const backendSignals = ["Python", "Django", "FastAPI", "PostgreSQL", "SQL", "Git"];
+  const frontendSignals = ["HTML", "CSS", "JavaScript", "React"];
+  const cloudSignals = ["Docker", "Cloud", "AWS", "Azure", "GCP", "Kubernetes"];
+
+  const strongBackend = strengths.some((s) => backendSignals.includes(s));
+  const missingFrontend = missing.some((s) => frontendSignals.includes(s));
+  const missingCloud = missing.some((s) => cloudSignals.includes(s));
+
+  const sentence =
+    strongBackend && (missingFrontend || missingCloud)
+      ? `You are strong in backend development but missing ${[missingFrontend ? "frontend" : null, missingCloud ? "cloud" : null]
+          .filter(Boolean)
+          .join(" and ")} skills.`
+      : "Keep strengthening core skills while closing the largest gaps first.";
+
+  return (
+    <div className="gradient-primary rounded-2xl p-6 text-primary-foreground shadow-sm">
+      <div className="flex items-start gap-3">
+        <Sparkles className="h-5 w-5 mt-0.5 shrink-0" />
+        <div>
+          <h3 className="font-semibold mb-1">Insight</h3>
+          <p className="text-sm opacity-90">{sentence}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildChart(data: SkillGapAnalysisData) {
+  const skills = data.skills ?? [];
+  const labels = skills.map((s) => s.name);
+  const scores = skills.map((s) => clampScore(s.score));
+  const colors = scores.map((v) => toneColor(v));
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: "Score",
+        data: scores,
+        backgroundColor: colors,
+        borderRadius: 10,
+        borderSkipped: false as const,
+        barPercentage: 0.7,
+        categoryPercentage: 0.7,
+      },
+    ],
+  };
+}
+
+const chartOptions: ChartOptions<"bar"> = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      enabled: true,
+      backgroundColor: "rgba(15, 23, 42, 0.92)",
+      padding: 12,
+      displayColors: false,
+      callbacks: {
+        title: (items: TooltipItem<"bar">[]) => items[0]?.label ?? "",
+        label: (item) => `Score: ${item.parsed.y}/100`,
+      },
+    },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { color: "hsl(215, 20%, 45%)", font: { size: 12 } },
+    },
+    y: {
+      min: 0,
+      max: 100,
+      ticks: { stepSize: 20, color: "hsl(215, 20%, 45%)", font: { size: 12 } },
+      grid: { color: "hsl(220, 15%, 90%)" },
+    },
+  },
+};
+
+function normalizeGapAnalysisFromApi(raw: unknown): SkillGapAnalysisData | null {
+  const asRecord = (v: unknown): Record<string, unknown> | null =>
+    v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+
+  const root = asRecord(raw);
+  if (!root) return null;
+
+  const analysis = asRecord(root.analysis) ?? root;
+  const a = asRecord(analysis);
+  if (!a) return null;
+
+  const goal = typeof a.goal === "string" ? a.goal : undefined;
+
+  const metrics = asRecord(a.metrics);
+  const overallFromMetrics = metrics && typeof metrics.overall_score === "number" ? metrics.overall_score : undefined;
+  const readiness_level = metrics && typeof metrics.readiness_level === "string" ? metrics.readiness_level : undefined;
+
+  const summary = asRecord(a.summary);
+  const readStringArray = (v: unknown) => (Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : undefined);
+
+  const strengths = summary ? readStringArray(summary.strengths) : undefined;
+  const weaknesses = summary ? readStringArray(summary.weaknesses) : undefined;
+  const missing_skills = summary ? readStringArray(summary.missing_skills) : undefined;
+  const overestimated_skills = summary ? readStringArray(summary.overestimated_skills) : undefined;
+
+  const skillsAnalysisRaw = a.skills_analysis;
+  const skills_analysis = Array.isArray(skillsAnalysisRaw) ? skillsAnalysisRaw : [];
+
+  const skills: SkillGapSkill[] = skills_analysis
+    .map((row) => {
+      const r = asRecord(row);
+      if (!r) return null;
+      const name = String(r.skill ?? r.name ?? "").trim();
+      if (!name) return null;
+
+      const statusRaw = String(r.status ?? "").trim();
+      const scoreRaw = r.score;
+      const score =
+        typeof scoreRaw === "number"
+          ? scoreRaw
+          : statusRaw === "strength"
+            ? 100
+            : statusRaw === "supporting_skill"
+              ? 60
+              : statusRaw === "overestimated_skill"
+                ? 0
+                : statusRaw === "missing_skill"
+                  ? 0
+                  : 0;
+
+      const statusTone =
+        statusRaw === "strength"
+          ? "strength"
+          : score >= 80
+            ? "strength"
+            : score >= 40
+              ? "medium"
+              : "missing";
+
+      return { name, score, status: statusTone } satisfies SkillGapSkill;
+    })
+    .filter((x): x is SkillGapSkill => x !== null);
+
+  const overall_score =
+    typeof overallFromMetrics === "number"
+      ? overallFromMetrics
+      : skills.length > 0
+        ? Math.round(skills.reduce((acc, s) => acc + clampScore(s.score), 0) / skills.length)
+        : 0;
+
+  return {
+    goal,
+    readiness_level,
+    overall_score,
+    skills,
+    strengths,
+    weaknesses,
+    missing_skills,
+    overestimated_skills,
+  };
+}
+
+function readGapAnalysisFromStorage(): SkillGapAnalysisData | null {
+  try {
+    const raw = localStorage.getItem("gap_analysis");
+    if (!raw) return null;
+    return normalizeGapAnalysisFromApi(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
+  const storageData = useMemo(() => readGapAnalysisFromStorage(), []);
+  const [serverData, setServerData] = useState<SkillGapAnalysisData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const userId = localStorage.getItem("user_id");
+    const sessionId = localStorage.getItem("session_id");
+    if (!userId || !sessionId) return;
+
+    setLoading(true);
+    setError(null);
+    fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/gap_analysis`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`gap_analysis failed (${r.status})`);
+        return r.json();
+      })
+      .then((json) => {
+        const normalized = normalizeGapAnalysisFromApi(json);
+        if (normalized) setServerData(normalized);
+        else setError("Gap analysis response was not recognized.");
+      })
+      .catch((e) => setError(e?.message || "Failed to load gap analysis."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const resolved = data ?? serverData ?? storageData ?? DEMO_DATA;
+
+  const overall = clampScore(resolved.overall_score ?? 0);
+  const readiness = readinessLabel(overall);
+
+  const strengthsList = resolved.strengths ?? [];
+  const weaknessesList = resolved.weaknesses ?? [];
+  const missingList = resolved.missing_skills ?? [];
+  const overestimatedList = resolved.overestimated_skills ?? [];
+
+  const chartData = buildChart(resolved);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Skill Analysis</h1>
-          <p className="text-muted-foreground text-sm mt-1">Based on your resume and assessments</p>
+          <h1 className="text-2xl font-bold">Skill Gap Analysis</h1>
+          <p className="text-muted-foreground text-sm mt-1">Dashboard view of your current readiness</p>
         </div>
         <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium">
-          <Sparkles className="h-4 w-4" />
-          AI-Powered Insights
+          <BarChart3 className="h-4 w-4" />
+          Product Insights
         </div>
       </div>
 
-      {/* AI Insight Card */}
-      <div className="gradient-primary rounded-2xl p-6 text-primary-foreground">
-        <div className="flex items-start gap-3">
-          <Sparkles className="h-5 w-5 mt-0.5 shrink-0" />
-          <div>
-            <h3 className="font-semibold mb-1">AI Insight</h3>
-            <p className="text-sm opacity-90">
-              You are strong in Java and REST APIs but weak in Multithreading and System Design.
-              Focus on these areas to become a well-rounded full-stack developer. I recommend spending
-              2 weeks on System Design fundamentals and 1 week on Java concurrency patterns.
-            </p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span
+                className={cn("h-2.5 w-2.5 rounded-full", {
+                  "bg-success": readiness.tone === "success",
+                  "bg-warning": readiness.tone === "warning",
+                  "bg-destructive": readiness.tone === "destructive",
+                })}
+              />
+              <h3 className="font-semibold">Readiness</h3>
+            </div>
+            <span
+              className={cn(
+                "text-xs px-2.5 py-1 rounded-full font-medium",
+                readiness.tone === "success" && "bg-success/10 text-success",
+                readiness.tone === "warning" && "bg-warning/10 text-warning",
+                readiness.tone === "destructive" && "bg-destructive/10 text-destructive"
+              )}
+            >
+              {readiness.text}
+            </span>
+          </div>
+
+          <ProgressBar value={overall} />
+
+          {resolved.goal && (
+            <div className="mt-3 text-sm text-muted-foreground">
+              Goal: <span className="font-medium text-foreground">{resolved.goal}</span>
+            </div>
+          )}
+          {loading && <div className="mt-3 text-sm text-muted-foreground">Loading latest analysis…</div>}
+          {error && <div className="mt-3 text-sm text-destructive">{error}</div>}
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="text-sm text-muted-foreground">Summary</div>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            {[
+              { label: "Strengths", value: strengthsList.length, pill: "strength" as const },
+              { label: "Weaknesses", value: weaknessesList.length, pill: "weakness" as const },
+              { label: "Missing", value: missingList.length, pill: "missing" as const },
+              { label: "Overestimated", value: overestimatedList.length, pill: "overestimated" as const },
+            ].map((x) => (
+              <div key={x.label} className="rounded-xl border border-border bg-background/40 p-3">
+                <div className="text-xs text-muted-foreground">{x.label}</div>
+                <div className="mt-1 flex items-center justify-between">
+                  <div className="text-lg font-bold">{x.value}</div>
+                  <span className={pillToneClasses(x.pill)}>{x.pill}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-card border border-border rounded-2xl p-6">
-        <h3 className="font-semibold mb-4">Skill Proficiency</h3>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={skillData} layout="vertical" margin={{ left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 90%)" />
-              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: "12px",
-                  border: "1px solid hsl(220, 15%, 90%)",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                }}
-                formatter={(value: number) => [`${value}/100`, "Score"]}
-              />
-              <Bar dataKey="score" radius={[0, 6, 6, 0]} barSize={20}>
-                {skillData.map((entry) => (
-                  <Cell key={entry.name} fill={getColor(entry.level)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+      <InsightText data={resolved} />
+
+      <ChartCard title="Skill Scores (0–100)">
+        <div className="h-[360px]">
+          <Bar data={chartData} options={chartOptions} />
         </div>
-        <div className="flex gap-6 mt-4 justify-center">
+        <div className="flex flex-wrap gap-4 mt-4 justify-center text-sm text-muted-foreground">
           {[
-            { label: "Strong (70+)", color: "bg-success" },
-            { label: "Medium (50-69)", color: "bg-warning" },
-            { label: "Weak (<50)", color: "bg-destructive" },
+            { label: "Strength (80–100)", color: "bg-success" },
+            { label: "Medium (40–79)", color: "bg-warning" },
+            { label: "Missing (0–39)", color: "bg-destructive" },
           ].map((item) => (
-            <div key={item.label} className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div key={item.label} className="flex items-center gap-2">
               <div className={cn("h-3 w-3 rounded-full", item.color)} />
               {item.label}
             </div>
           ))}
         </div>
-      </div>
+      </ChartCard>
 
-      {/* Skill Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {skillData.map((skill, i) => {
-          const Icon = getLevelIcon(skill.level);
-          return (
-            <div
-              key={skill.name}
-              className="bg-card border border-border rounded-xl p-4 hover-lift animate-fade-in"
-              style={{ animationDelay: `${i * 0.05}s` }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium">{skill.name}</h4>
-                <span
-                  className={cn(
-                    "text-xs px-2.5 py-1 rounded-full font-medium",
-                    skill.level === "strong" && "bg-success/10 text-success",
-                    skill.level === "medium" && "bg-warning/10 text-warning",
-                    skill.level === "weak" && "bg-destructive/10 text-destructive"
-                  )}
-                >
-                  {skill.level.charAt(0).toUpperCase() + skill.level.slice(1)}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000"
-                    style={{
-                      width: `${skill.score}%`,
-                      backgroundColor: getColor(skill.level),
-                    }}
-                  />
-                </div>
-                <span className="text-sm font-semibold" style={{ color: getColor(skill.level) }}>
-                  {skill.score}
-                </span>
-                <Icon className="h-4 w-4" style={{ color: getColor(skill.level) }} />
-              </div>
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <CategoryList title="Strengths" tone="strength" items={strengthsList} />
+        <CategoryList title="Weaknesses" tone="weakness" items={weaknessesList} />
+        <CategoryList title="Missing Skills" tone="missing" items={missingList} />
+        <CategoryList title="Overestimated Skills" tone="overestimated" items={overestimatedList} />
       </div>
     </div>
   );

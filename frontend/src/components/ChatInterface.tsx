@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Send, Upload, Sparkles, FileText, Map, ClipboardCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ interface Message {
   timestamp: Date;
   quiz?: QuizItem[];
   quizResults?: QuizResult[];
+  showStartQuizButton?: boolean;
   file?: {
     name: string;
     size: number;
@@ -55,67 +57,103 @@ interface ChatInterfaceProps {
 }
 
 const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
+  const navigate = useNavigate();
   const API_BASE = "http://localhost:8000/api";
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [quizSelections, setQuizSelections] = useState<Record<string, number[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const renderInline = (text: string) => {
+    // Supports **bold** and markdown-style links: [label](/app/skills)
+    const parts: React.ReactNode[] = [];
+    const linkRe = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let lastIdx = 0;
+    let m: RegExpExecArray | null;
+
+    const renderBold = (s: string) =>
+      s.split("**").map((part, k) => (k % 2 === 1 ? <strong key={`b-${k}`}>{part}</strong> : part));
+
+    while ((m = linkRe.exec(text)) !== null) {
+      const [full, label, href] = m;
+      const start = m.index;
+      if (start > lastIdx) {
+        parts.push(<span key={`t-${lastIdx}`}>{renderBold(text.slice(lastIdx, start))}</span>);
+      }
+      parts.push(
+        <Link key={`l-${start}`} to={href} className="underline underline-offset-2 font-medium hover:opacity-80">
+          {label}
+        </Link>
+      );
+      lastIdx = start + full.length;
+    }
+
+    if (lastIdx < text.length) {
+      parts.push(<span key={`t-${lastIdx}`}>{renderBold(text.slice(lastIdx))}</span>);
+    }
+
+    return parts;
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    const sessionId = localStorage.getItem("session_id");
-    const userId = localStorage.getItem("user_id");
-    if (sessionId) {
-      fetch(`${API_BASE}/chat/${userId}/${sessionId}/history`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.messages && data.messages.length > 0) {
-            const historicalMessages: Message[] = data.messages.map((msg: { role: string; content: string; created_at?: string; meta?: unknown }, idx: number) => {
-              const message: Message = {
-                id: `hist-${idx}`,
-                role: msg.role === "user" ? "user" : "ai",
-                content: msg.content,
-                quiz: msg.meta?.quiz as QuizItem[] | undefined,
-                quizResults: msg.meta?.quiz_results as QuizResult[] | undefined,
-                timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
-              };
+  // useEffect(() => {
+  //   const sessionId = localStorage.getItem("session_id");
+  //   const userId = localStorage.getItem("user_id");
+  //   if (sessionId) {
+  //     fetch(`${API_BASE}/chat/${userId}/${sessionId}/history`)
+  //       .then((res) => res.json())
+  //       .then((data) => {
+  //         if (data.messages && data.messages.length > 0) {
+  //           const historicalMessages: Message[] = data.messages.map((msg: { role: string; content: string; created_at?: string; meta?: Record<string, unknown> | null }, idx: number) => {
+  //             const metaRec = msg.meta && typeof msg.meta === "object" ? msg.meta : null;
+  //             const quiz = Array.isArray(metaRec?.quiz) ? (metaRec.quiz as QuizItem[]) : undefined;
+  //             const quizResults = Array.isArray(metaRec?.quiz_results) ? (metaRec.quiz_results as QuizResult[]) : undefined;
+  //             const message: Message = {
+  //               id: `hist-${idx}`,
+  //               role: msg.role === "user" ? "user" : "ai",
+  //               content: msg.content,
+  //               quiz,
+  //               quizResults,
+  //               timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
+  //             };
 
-              if (msg.meta && typeof msg.meta === "object") {
-                const meta = msg.meta as Record<string, unknown>;
-                if (meta.action === "generate_quiz" || meta.action === "quiz_response") {
-                  const quizMatch = msg.content.match(/\{[^}]+\}/g);
-                  if (quizMatch) {
-                    try {
-                      const parsed = JSON.parse(quizMatch.join(""));
-                      if (Array.isArray(parsed)) {
-                        message.quiz = parsed.map((q, qi) => ({
-                          id: typeof q.id === "number" ? q.id : qi + 1,
-                          question: q.question || "",
-                          options: Array.isArray(q.options) ? q.options.map(String) : [],
-                          skill: q.skill_tested_on || q.skill || "",
-                        }));
-                      }
-                    } catch {}
-                  }
-                }
-              }
+  //             if (msg.meta && typeof msg.meta === "object") {
+  //               const meta = msg.meta as Record<string, unknown>;
+  //               if (meta.action === "generate_quiz" || meta.action === "quiz_response") {
+  //                 const quizMatch = msg.content.match(/\{[^}]+\}/g);
+  //                 if (quizMatch) {
+  //                   try {
+  //                     const parsed = JSON.parse(quizMatch.join(""));
+  //                     if (Array.isArray(parsed)) {
+  //                       message.quiz = parsed.map((q, qi) => ({
+  //                         id: typeof q.id === "number" ? q.id : qi + 1,
+  //                         question: q.question || "",
+  //                         options: Array.isArray(q.options) ? q.options.map(String) : [],
+  //                         skill: q.skill_tested_on || q.skill || "",
+  //                       }));
+  //                     }
+  //                   } catch {
+  //                     // ignore malformed historical payloads
+  //                   }
+  //                 }
+  //               }
+  //             }
 
-              return message;
-            });
-            setMessages([...initialMessages, ...historicalMessages]);
-          }
-        })
-        .catch(console.error);
-    }
-  }, []);
+  //             return message;
+  //           });
+  //           setMessages([...initialMessages, ...historicalMessages]);
+  //         }
+  //       })
+  //       .catch(console.error);
+  //   }
+  // }, []);
 
   const handleStartChat = (type: string) => {
     setMessages([
@@ -313,6 +351,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
           .filter(Boolean)
           .join("\n");
 
+        const showStartQuiz = data?.status === "AWAITING_QUIZ";
+
         setMessages((prev) => [
           ...prev,
           {
@@ -320,6 +360,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
             role: "ai",
             content: agentText,
             timestamp: new Date(),
+            showStartQuizButton: showStartQuiz,
           },
         ]);
         return;
@@ -442,58 +483,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
     }
   };
 
-  const handleAnalyzeGaps = async () => {
-    if (isTyping || isAnalyzingGaps) return;
-    const sessionId = localStorage.getItem("session_id");
-    const userId = localStorage.getItem("user_id");
-    if (!sessionId || !userId) return;
-
-    setIsAnalyzingGaps(true);
-    setIsTyping(true);
-    try {
-      const res = await fetch(
-        `${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/analyze_gaps`,
-        { method: "POST" }
-      );
-      if (!res.ok) {
-        throw new Error(`analyze_gaps failed (${res.status})`);
-      }
-      const data = await res.json();
-      const content =
-        typeof data?.message === "string"
-          ? data.message
-          : typeof data?.analysis === "string"
-            ? data.analysis
-            : typeof data?.result === "string"
-              ? data.result
-              : typeof data === "string"
-                ? data
-                : JSON.stringify(data, null, 2);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "ai",
-          content,
-          timestamp: new Date(),
-        },
-      ]);
-    } catch (e) {
-      console.error(e);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "ai",
-          content: "Sorry — I couldn't generate your gap analysis right now. Please try again.",
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      setIsTyping(false);
-      setIsAnalyzingGaps(false);
-    }
+  const handleAnalyzeGaps = () => {
+    navigate("/skills");
   };
 
   const uploadResumeToBackend = async (file: File) => {
@@ -608,9 +599,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                   )}
                   {msg.content.split("\n").map((line, j) => (
                     <p key={j} className={cn(line === "" && "h-2")}>
-                      {line.split("**").map((part, k) =>
-                        k % 2 === 1 ? <strong key={k}>{part}</strong> : part
-                      )}
+                      {renderInline(line)}
                     </p>
                   ))}
                 </div>
@@ -763,7 +752,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                         variant="gradient"
                         size="sm"
                         type="button"
-                        disabled={isTyping || isAnalyzingGaps}
+                        disabled={isTyping}
                         onClick={handleAnalyzeGaps}
                       >
                         View your gap analysis
@@ -774,14 +763,11 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
 
                 {msg.role === "ai" &&
                   !msg.quiz &&
-                  msg.content.toLowerCase().includes("ready to start") && (
+                  (msg.content.toLowerCase().includes("ready to start") || msg.showStartQuizButton) && (
                     <div className="mt-3 flex gap-2">
                       <Button variant="gradient" size="sm" onClick={handleStartQuiz} disabled={isTyping}>
                         Yes
                       </Button>
-                      {/* <Button variant="outline" size="sm" onClick={() => handleSend("No")} disabled={isTyping}>
-                        No
-                      </Button> */}
                     </div>
                   )}
               </div>

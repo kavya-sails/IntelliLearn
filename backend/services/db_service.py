@@ -131,3 +131,15 @@ def get_claimed_skills(user_id: int, session_id: int) -> Optional[ClaimedSkills]
             )
             row = cur.fetchone()
             return ClaimedSkills.model_validate(dict(row)) if row else None
+
+
+def get_gap_analysis(user_id: int, session_id: int) -> Optional[Dict[str, Any]]:
+    """Get saved gap analysis JSON for a session."""
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                "SELECT analysis, created_at FROM gap_analysis WHERE session_id = %s AND user_id = %s",
+                (session_id, user_id),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
