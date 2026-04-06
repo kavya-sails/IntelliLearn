@@ -627,7 +627,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                 )}
 
                 {msg.role === "ai" &&
-                  /are you ready to start the skill assessment quiz\?/i.test(msg.content) && (
+                  !msg.quiz &&
+                  msg.content.toLowerCase().includes("assessment") && (
                     <div className="mt-3 flex gap-2">
                       <Button variant="gradient" size="sm" onClick={handleStartQuiz} disabled={isTyping}>
                         Yes
