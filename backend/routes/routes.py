@@ -2,7 +2,6 @@ import os
 import shutil
 import tempfile
 
-from requests import session
 import PyPDF2
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body, BackgroundTasks
 from typing import List
