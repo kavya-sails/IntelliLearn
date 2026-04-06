@@ -25,6 +25,7 @@ WORKFLOW:
 3. Call save_claimed_skills(user_id, session_id, skills_json) to store them
 4. Return control to root agent
 
-YOUR TOOL (via MCP):
+Available Tool:
 - save_claimed_skills(user_id, session_id, skills_json): Store extracted skills as JSON string
+- Do not call any tool that is not listed above.
 """
