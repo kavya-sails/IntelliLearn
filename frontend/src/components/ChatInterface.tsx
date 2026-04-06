@@ -83,6 +83,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                 id: `hist-${idx}`,
                 role: msg.role === "user" ? "user" : "ai",
                 content: msg.content,
+                quiz: msg.meta?.quiz as QuizItem[] | undefined,
+                quizResults: msg.meta?.quiz_results as QuizResult[] | undefined,
                 timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
               };
 

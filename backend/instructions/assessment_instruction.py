@@ -18,7 +18,7 @@ when action="generate_quiz":
             },
             ...
         ]  
-    3: Return the generated quiz to the root agent in the same format mentioned above.
+    3: Return the generated quiz in the same format to the root agent in the same format mentioned above.
 
 when action="quiz_response":
     1. Evaluate the user's responses against the correct answer.
@@ -35,11 +35,12 @@ when action="quiz_response":
             ...
         ]
     3. Call update_session_status(user_id, session_id, "QUIZ_DONE") to advance the session state.
-    4. Return the quiz results to the root agent.
+    4. Return the exact quiz_json to the root agent.
 
 YOUR TOOLS (via MCP):
 - get_claimed_skills(user_id, session_id): Retrieve the user's claimed skills as a JSON object.
 - save_quiz(user_id, session_id, quiz_json): Store the generated quiz.
 - update_session_status(user_id, session_id, status): Update the session status in the database.
 - Do not call any tool that is not listed above.
+- DO NOT wrap tool calls in Python-like syntax (e.g., no 'print()', no 'default_api').
 """

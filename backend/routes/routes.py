@@ -105,28 +105,23 @@ async def send_message(request: ChatMessageRequest):
         }
 
         agent_response = await run_agent(prompt, user_id, session_id)
-
-        reply_text = agent_response["reply"].get(
-            "message", str(agent_response["reply"])
-        )
+        logger.info(f"Agent response: {agent_response}")
+        reply_data = agent_response.get("reply", {})
+        if isinstance(reply_data, list):
+            reply_text = " ".join(str(item) for item in reply_data)
+        elif isinstance(reply_data, dict):
+            reply_text = reply_data.get("message", {})
+        else:
+            reply_text = str(reply_data)
 
         save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
 
         updated_session = get_session(user_id, session_id)
 
-        # meta = None
-        # if updated_session["status"] == "AWAITING_QUIZ":
-        #     skills = get_claimed_skills(user_id, session_id)
-        #     if skills:
-        #         meta = {
-        #             "skills": skills.skills,
-        #         }
-
         return ChatMessageResponse(
             session_id=session_id,
             message=reply_text,
             status=updated_session.status,
-            # meta=meta,
         )
 
     except Exception as e:
@@ -262,7 +257,7 @@ async def start_quiz(user_id: int, session_id: int):
         if session.status != SessionStatus.AWAITING_QUIZ:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot start quiz in current state: {session['status']}",
+                detail=f"Cannot start quiz in current state: {session.status}",
             )
 
         # Save user action in chat history
@@ -288,20 +283,21 @@ async def start_quiz(user_id: int, session_id: int):
         logger.info(f"Agent response after starting quiz: {agent_response}")
         reply_data = agent_response.get("reply", [])
         if isinstance(reply_data, list):
-            reply_text = " ".join(str(item) for item in reply_data)
-        elif isinstance(reply_data, dict):
-            reply_text = reply_data.get(
-                "message", "Quiz started! Here are your questions."
-            )
-        else:
-            reply_text = str(reply_data)
+            reply_data = {"quiz": reply_data}
 
         # Save assistant response
-        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
+        save_chat_message(
+            user_id,
+            session_id,
+            MessageRole.ASSISTANT,
+            "Here are the questions for your quiz:",
+            reply_data,
+        )
 
         return {
             "session_id": session_id,
             "message": reply_data,
+            "quiz": reply_data.get("quiz", []),
             "status": "QUIZ_IN_PROGRESS",
         }
 
@@ -354,22 +350,17 @@ async def done_quiz(
 
         reply_data = agent_response.get("reply", [])
         if isinstance(reply_data, list):
-            reply_text = " ".join(str(item) for item in reply_data)
-        elif isinstance(reply_data, dict):
-            reply_text = reply_data.get(
-                "message",
-                "Quiz analyzed! Here is your gap analysis.",
-            )
-        else:
-            reply_text = str(reply_data)
+            reply_data = {"quiz_results": reply_data}
 
         # Save assistant response
-        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
+        save_chat_message(
+            user_id, session_id, MessageRole.ASSISTANT, "Quiz results", reply_data
+        )
         updated_session = get_session(user_id, session_id)
 
         return {
             "session_id": session_id,
-            "message": reply_data,
+            "message": reply_data.get("quiz_results", reply_data),
             "status": updated_session.status,
         }
 
@@ -406,28 +397,28 @@ async def analyze_gaps(user_id: int, session_id: int):
             "session_id": session_id,
             "user_id": user_id,
             "action": "analyze_gaps",
-            "goal": session.get("goal"),
+            "goal": session.goal,
         }
 
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting gap analysis: {agent_response}")
-        reply_data = agent_response.get("reply", [])
+        reply_data = agent_response.get("reply", {})
         if isinstance(reply_data, list):
-            reply_text = " ".join(str(item) for item in reply_data)
-        elif isinstance(reply_data, dict):
-            reply_text = reply_data.get(
-                "message", "Gap analysis completed! Here are your results."
-            )
-        else:
-            reply_text = str(reply_data)
+            reply_data = {"gap_analysis_report": reply_data}
 
         # Save assistant response
-        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
+        save_chat_message(
+            user_id,
+            session_id,
+            MessageRole.ASSISTANT,
+            "Gap analysis results",
+            reply_data,
+        )
         updated_session = get_session(user_id, session_id)
 
         return {
             "session_id": session_id,
-            "message": reply_data,
+            "message": reply_data.get("gap_analysis_report", reply_data),
             "status": updated_session.status,
         }
 
