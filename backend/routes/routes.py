@@ -440,7 +440,6 @@ async def generate_plan(user_id: int, session_id: int):
             "gap_analysis": session.get("gap_analysis"),
             "current_status": SessionStatus.GENERATING_PLAN,
         }
-
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting plan generation: {agent_response}")
         reply_data = agent_response.get("reply", [])
