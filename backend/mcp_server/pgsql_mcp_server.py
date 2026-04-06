@@ -243,5 +243,51 @@ def save_gap_analysis(user_id: int, session_id: int, gap_analysis_json: str) -> 
         conn.close()
 
 
+@mcp.tool()
+def save_roadmap(user_id: int, session_id: int, roadmap_json: str) -> dict:
+    """
+    Save the generated learning roadmap for a session.
+    Returns: {session_id, roadmap_saved: bool}
+    """
+    try:
+        roadmap = json.loads(roadmap_json)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"roadmap_json is not valid JSON: {e}")
+
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """INSERT INTO learning_roadmaps (user_id, session_id, roadmap)
+                   VALUES (%s, %s, %s::jsonb)
+                   ON CONFLICT (session_id)
+                   DO UPDATE SET roadmap=EXCLUDED.roadmap, updated_at=now()
+                   RETURNING *""",
+                (user_id, session_id, json.dumps(roadmap)),
+            )
+            return {
+                "session_id": session_id,
+                "roadmap_saved": True,
+            }
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def get_roadmap(user_id: int, session_id: int) -> Optional[dict]:
+    """Retrieve learning roadmap for a session. Returns None if not found."""
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM learning_roadmaps WHERE user_id=%s AND session_id=%s",
+                (user_id, session_id),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     mcp.run()

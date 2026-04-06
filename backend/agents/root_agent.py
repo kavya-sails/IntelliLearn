@@ -2,6 +2,7 @@ from google.adk.agents import LlmAgent
 from agents.skill_parser_agent import skill_parser_agent
 from agents.assessment_agent import assessment_agent
 from agents.gap_analysis_agent import gap_analysis_agent
+from agents.roadmap_agent import roadmap_agent
 from instructions.root_agent_instructions import ROOT_INSTRUCTION
 import os
 from dotenv import load_dotenv
@@ -23,6 +24,7 @@ root_agent = LlmAgent(
     sub_agents=[
         skill_parser_agent,
         assessment_agent,
-        gap_analysis_agent
+        gap_analysis_agent,
+        roadmap_agent
     ],
 )

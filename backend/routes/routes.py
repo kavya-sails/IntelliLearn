@@ -436,3 +436,70 @@ async def analyze_gaps(user_id: int, session_id: int):
     except Exception as e:
         logger.exception(f"Error in analyze_gaps: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chat/{user_id}/{session_id}/generate_roadmap")
+async def generate_roadmap(user_id: int, session_id: int):
+    """
+    Generate personalized learning roadmap based on gap analysis
+    """
+    try:
+        session = get_session(user_id, session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        if session.status != SessionStatus.GAP_DONE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot generate roadmap in current state: {session.status}. Must complete gap analysis first.",
+            )
+
+        # Save user action in chat history
+        save_chat_message(
+            user_id,
+            session_id,
+            MessageRole.USER,
+            "[User requested learning roadmap]",
+            meta={"action": "generate_roadmap"},
+        )
+
+        original_status = session.status
+        update_session_status(user_id, session_id, SessionStatus.ROADMAP_READY)
+
+        prompt = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "action": "generate_roadmap",
+            "goal": session.get("goal"),
+            "domain": session.get("domain"),
+        }
+
+        agent_response = await run_agent(prompt, user_id, session_id)
+        logger.info(f"Agent response after generating roadmap: {agent_response}")
+        
+        reply_data = agent_response.get("reply", [])
+        if isinstance(reply_data, list):
+            reply_text = " ".join(str(item) for item in reply_data)
+        elif isinstance(reply_data, dict):
+            reply_text = reply_data.get(
+                "message", "Your learning roadmap has been generated!"
+            )
+        else:
+            reply_text = str(reply_data)
+
+        # Save assistant response
+        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
+        updated_session = get_session(user_id, session_id)
+
+        return {
+            "session_id": session_id,
+            "message": reply_data,
+            "status": updated_session.status,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in generate_roadmap: {e}")
+        update_session_status(user_id, session_id, original_status)
+        raise HTTPException(status_code=500, detail=str(e))

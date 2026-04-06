@@ -64,3 +64,17 @@ CREATE TABLE IF NOT EXISTS gap_analysis (
     analysis   JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_gap_analysis_session ON gap_analysis(user_id, session_id);
+
+-- ── LEARNING ROADMAPS ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS learning_roadmaps (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    session_id BIGINT NOT NULL UNIQUE REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    roadmap    JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_learning_roadmaps_session ON learning_roadmaps(user_id, session_id);
