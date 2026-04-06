@@ -382,7 +382,6 @@ async def done_quiz(
         logger.exception(f"Error in done_quiz: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 async def run_gap_analysis(
     user_id: int, session_id: int, goal: str, status: SessionStatus
 ):
@@ -401,71 +400,23 @@ async def run_gap_analysis(
         }
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after gap analysis: {agent_response}")
+        await generate_plan(user_id, session_id, SessionStatus.GAP_ANALYSIS_COMPLETE, goal)
 
     except Exception as e:
         logger.exception(f"Error in analyze_gaps: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        update_session_status(user_id, session_id, SessionStatus.QUIZ_DONE)
 
-
-@router.post("/chat/{user_id}/{session_id}/generate_plan")
-async def generate_plan(user_id: int, session_id: int):
+async def generate_plan(user_id: int, session_id: int, status: SessionStatus, goal: str):
     try:
-        session = get_session(user_id, session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        if session.status != SessionStatus.GAP_ANALYSIS_COMPLETE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot generate plan in current state: {session.status}",
-            )
-
-        # Save user action in chat history
-        save_chat_message(
-            user_id,
-            session_id,
-            MessageRole.USER,
-            "[User requested learning plan]",
-            meta={"action": "generate_plan"},
-            
-        )
-        original_status = session.status
-        update_session_status(user_id, session_id, SessionStatus.GENERATING_PLAN)
-
         prompt = {
             "session_id": session_id,
             "user_id": user_id,
             "action": "generate_plan",
-            "goal": session.get("goal"),
-            "gap_analysis": session.get("gap_analysis"),
-            "current_status": SessionStatus.GENERATING_PLAN,
+            "goal": goal
         }
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting plan generation: {agent_response}")
-        reply_data = agent_response.get("reply", [])
-        if isinstance(reply_data, list):
-            reply_text = " ".join(str(item) for item in reply_data)
-        elif isinstance(reply_data, dict):
-            reply_text = reply_data.get(
-                "message", "Learning plan generated! Here are your recommendations."
-            )
-        else:
-            reply_text = str(reply_data)
 
-        # Save assistant response
-        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
-        updated_session = get_session(user_id, session_id)
-
-        return {
-            "session_id": session_id,
-            "message": reply_data,
-            "status": "GENERATING_PLAN",
-        }
-
-    except HTTPException:
-        raise
     except Exception as e:
         logger.exception(f"Error in generate_plan: {e}")
-        update_session_status(user_id, session_id, original_status)
-        raise HTTPException(status_code=500, detail=str(e))
-        logger.exception(f"Error in background gap analysis: {e}")
+        update_session_status(user_id, session_id, status)

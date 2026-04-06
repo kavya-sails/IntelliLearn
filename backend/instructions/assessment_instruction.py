@@ -43,4 +43,7 @@ YOUR TOOLS (via MCP):
 - update_session_status(user_id, session_id, status): Update the session status in the database.
 - Do not call any tool that is not listed above.
 - DO NOT wrap tool calls in Python-like syntax (e.g., no 'print()', no 'default_api').
+
+IMPORTANT:
+- Do not return the output in string format. Always return the output in the specified JSON format.
 """
