@@ -103,57 +103,57 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // useEffect(() => {
-  //   const sessionId = localStorage.getItem("session_id");
-  //   const userId = localStorage.getItem("user_id");
-  //   if (sessionId) {
-  //     fetch(`${API_BASE}/chat/${userId}/${sessionId}/history`)
-  //       .then((res) => res.json())
-  //       .then((data) => {
-  //         if (data.messages && data.messages.length > 0) {
-  //           const historicalMessages: Message[] = data.messages.map((msg: { role: string; content: string; created_at?: string; meta?: Record<string, unknown> | null }, idx: number) => {
-  //             const metaRec = msg.meta && typeof msg.meta === "object" ? msg.meta : null;
-  //             const quiz = Array.isArray(metaRec?.quiz) ? (metaRec.quiz as QuizItem[]) : undefined;
-  //             const quizResults = Array.isArray(metaRec?.quiz_results) ? (metaRec.quiz_results as QuizResult[]) : undefined;
-  //             const message: Message = {
-  //               id: `hist-${idx}`,
-  //               role: msg.role === "user" ? "user" : "ai",
-  //               content: msg.content,
-  //               quiz,
-  //               quizResults,
-  //               timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
-  //             };
+  useEffect(() => {
+    const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
+    if (sessionId) {
+      fetch(`${API_BASE}/chat/${userId}/${sessionId}/history`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.messages && data.messages.length > 0) {
+            const historicalMessages: Message[] = data.messages.map((msg: { role: string; content: string; created_at?: string; meta?: Record<string, unknown> | null }, idx: number) => {
+              const metaRec = msg.meta && typeof msg.meta === "object" ? msg.meta : null;
+              const quiz = Array.isArray(metaRec?.quiz) ? (metaRec.quiz as QuizItem[]) : undefined;
+              const quizResults = Array.isArray(metaRec?.quiz_results) ? (metaRec.quiz_results as QuizResult[]) : undefined;
+              const message: Message = {
+                id: `hist-${idx}`,
+                role: msg.role === "user" ? "user" : "ai",
+                content: msg.content,
+                quiz,
+                quizResults,
+                timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
+              };
 
-  //             if (msg.meta && typeof msg.meta === "object") {
-  //               const meta = msg.meta as Record<string, unknown>;
-  //               if (meta.action === "generate_quiz" || meta.action === "quiz_response") {
-  //                 const quizMatch = msg.content.match(/\{[^}]+\}/g);
-  //                 if (quizMatch) {
-  //                   try {
-  //                     const parsed = JSON.parse(quizMatch.join(""));
-  //                     if (Array.isArray(parsed)) {
-  //                       message.quiz = parsed.map((q, qi) => ({
-  //                         id: typeof q.id === "number" ? q.id : qi + 1,
-  //                         question: q.question || "",
-  //                         options: Array.isArray(q.options) ? q.options.map(String) : [],
-  //                         skill: q.skill_tested_on || q.skill || "",
-  //                       }));
-  //                     }
-  //                   } catch {
-  //                     // ignore malformed historical payloads
-  //                   }
-  //                 }
-  //               }
-  //             }
+              if (msg.meta && typeof msg.meta === "object") {
+                const meta = msg.meta as Record<string, unknown>;
+                if (meta.action === "generate_quiz" || meta.action === "quiz_response") {
+                  const quizMatch = msg.content.match(/\{[^}]+\}/g);
+                  if (quizMatch) {
+                    try {
+                      const parsed = JSON.parse(quizMatch.join(""));
+                      if (Array.isArray(parsed)) {
+                        message.quiz = parsed.map((q, qi) => ({
+                          id: typeof q.id === "number" ? q.id : qi + 1,
+                          question: q.question || "",
+                          options: Array.isArray(q.options) ? q.options.map(String) : [],
+                          skill: q.skill_tested_on || q.skill || "",
+                        }));
+                      }
+                    } catch {
+                      // ignore malformed historical payloads
+                    }
+                  }
+                }
+              }
 
-  //             return message;
-  //           });
-  //           setMessages([...initialMessages, ...historicalMessages]);
-  //         }
-  //       })
-  //       .catch(console.error);
-  //   }
-  // }, []);
+              return message;
+            });
+            setMessages([...initialMessages, ...historicalMessages]);
+          }
+        })
+        .catch(console.error);
+    }
+  }, []);
 
   const handleStartChat = (type: string) => {
     setMessages([
