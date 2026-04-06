@@ -1,8 +1,10 @@
 import os
 import shutil
 import tempfile
+
+from requests import session
 import PyPDF2
-from fastapi import APIRouter, UploadFile, File, HTTPException, Body
+from fastapi import APIRouter, UploadFile, File, HTTPException, Body, BackgroundTasks
 from typing import List
 import logging
 from services.agent_runner import run_agent
@@ -311,7 +313,10 @@ async def start_quiz(user_id: int, session_id: int):
 
 @router.post("/chat/{user_id}/{session_id}/done_quiz")
 async def done_quiz(
-    user_id: int, session_id: int, quiz_results: List[dict] = Body(...)
+    user_id: int,
+    session_id: int,
+    background_tasks: BackgroundTasks,
+    quiz_results: List[dict] = Body(...),
 ):
     try:
         session = get_session(user_id, session_id)
@@ -357,6 +362,13 @@ async def done_quiz(
             user_id, session_id, MessageRole.ASSISTANT, "Quiz results", reply_data
         )
         updated_session = get_session(user_id, session_id)
+        background_tasks.add_task(
+            run_gap_analysis,
+            user_id,
+            session_id,
+            updated_session.goal,
+            updated_session.status,
+        )
 
         return {
             "session_id": session_id,
@@ -371,59 +383,24 @@ async def done_quiz(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/chat/{user_id}/{session_id}/analyze_gaps")
-async def analyze_gaps(user_id: int, session_id: int):
+async def run_gap_analysis(
+    user_id: int, session_id: int, goal: str, status: SessionStatus
+):
     try:
-        session = get_session(user_id, session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        if session.status != SessionStatus.QUIZ_DONE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot start gap analysis in current state: {session.status}",
+        if status != SessionStatus.QUIZ_DONE:
+            logger.error(
+                f"Session status not updated to QUIZ_DONE after quiz submission. Cannot proceed to gap analysis. Current status: {status}"
             )
-
-        # Save user action in chat history
-        save_chat_message(
-            user_id,
-            session_id,
-            "user",
-            "[User started gap analysis]",
-            meta={"action": "analyze_gaps"},
-        )
+            return
 
         prompt = {
             "session_id": session_id,
             "user_id": user_id,
             "action": "analyze_gaps",
-            "goal": session.goal,
+            "goal": goal,
         }
-
         agent_response = await run_agent(prompt, user_id, session_id)
-        logger.info(f"Agent response after starting gap analysis: {agent_response}")
-        reply_data = agent_response.get("reply", {})
-        if isinstance(reply_data, list):
-            reply_data = {"gap_analysis_report": reply_data}
+        logger.info(f"Agent response after gap analysis: {agent_response}")
 
-        # Save assistant response
-        save_chat_message(
-            user_id,
-            session_id,
-            MessageRole.ASSISTANT,
-            "Gap analysis results",
-            reply_data,
-        )
-        updated_session = get_session(user_id, session_id)
-
-        return {
-            "session_id": session_id,
-            "message": reply_data.get("gap_analysis_report", reply_data),
-            "status": updated_session.status,
-        }
-
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.exception(f"Error in analyze_gaps: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(f"Error in background gap analysis: {e}")

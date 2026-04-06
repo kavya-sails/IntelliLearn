@@ -21,14 +21,7 @@ STEP 3: Perform Gap Analysis
   3. Assessed Skills (quiz performance)
 
 Identify:
-- Strengths:
-  Skills where user performs well AND are relevant to goal
-- Weaknesses:
-  Skills where user attempted but performed poorly
-- Missing Skills:
-  Required skills NOT present in claimed skills
-- Overestimated Skills:
-  Claimed skills where quiz performance is low
+- Strengths, Weaknesses, Missing Skills, Overestimated Skills
 
 STEP 4: Generate Gap Analysis Report in this output format:
   gap_analysis_report = {
@@ -61,5 +54,5 @@ STEP 4: Generate Gap Analysis Report in this output format:
   - Call save_gap_analysis(user_id, session_id, gap_analysis_report) to store the analysis in the database.
   - Call update_session_status(user_id, session_id, "GAP_ANALYSIS_COMPLETE")
   - DO NOT wrap tool calls in Python-like syntax (e.g., no 'print()', no 'default_api').
-Final Step: Return the gap_analysis_report object to the root agent
+Final Step: Return the success signal to the root agent. Don't return the entire report, just a confirmation message like "Gap analysis completed! Here are your results."
 """
