@@ -14,9 +14,9 @@ type QuizItem = {
 
 type QuizResult = {
   question: string;
+  options?: string[];
+  answer: string;
   user_response: string;
-  correct_answer: string;
-  is_correct: boolean;
   skill_tested_on: string;
 };
 
@@ -59,6 +59,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [quizSelections, setQuizSelections] = useState<Record<string, number[]>>({});
@@ -409,7 +410,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
       
       if (Array.isArray(data?.message)) {
         quizResults = data.message;
-        const correctCount = quizResults.filter(r => r.is_correct).length;
+        const correctCount = quizResults.filter(r => r.user_response === r.answer).length;
         messageContent = `You answered ${correctCount} out of ${quizResults.length} correctly!`;
       }
 
@@ -436,6 +437,60 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
       ]);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleAnalyzeGaps = async () => {
+    if (isTyping || isAnalyzingGaps) return;
+    const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
+    if (!sessionId || !userId) return;
+
+    setIsAnalyzingGaps(true);
+    setIsTyping(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/analyze_gaps`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        throw new Error(`analyze_gaps failed (${res.status})`);
+      }
+      const data = await res.json();
+      const content =
+        typeof data?.message === "string"
+          ? data.message
+          : typeof data?.analysis === "string"
+            ? data.analysis
+            : typeof data?.result === "string"
+              ? data.result
+              : typeof data === "string"
+                ? data
+                : JSON.stringify(data, null, 2);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (e) {
+      console.error(e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: "Sorry — I couldn't generate your gap analysis right now. Please try again.",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+      setIsAnalyzingGaps(false);
     }
   };
 
@@ -644,36 +699,74 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
 
                 {msg.role === "ai" && msg.quizResults && msg.quizResults.length > 0 && (
                   <div className="mt-3 space-y-3">
-                    {msg.quizResults.map((result, idx) => (
-                      <div 
-                        key={idx} 
-                        className={cn(
-                          "rounded-xl border p-3",
-                          result.is_correct 
-                            ? "border-green-500/50 bg-green-500/10" 
-                            : "border-red-500/50 bg-red-500/10"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div className="text-sm font-medium">
-                            {idx + 1}. {result.question}
-                          </div>
-                          {result.skill_tested_on && (
-                            <span className="shrink-0 text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
-                              {result.skill_tested_on}
-                            </span>
+                    {msg.quizResults.map((result, idx) => {
+                      const userAnswer = result.user_response?.trim() || result.user_response;
+                      const correctAnswer = result.answer?.trim() || result.answer;
+                      const isCorrect = userAnswer === correctAnswer;
+                      return (
+                        <div 
+                          key={idx} 
+                          className={cn(
+                            "rounded-xl border p-3",
+                            isCorrect 
+                              ? "border-green-500/50 bg-green-500/10" 
+                              : "border-red-500/50 bg-red-500/10"
                           )}
-                        </div>
-                        <div className="text-sm space-y-1">
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="text-sm font-medium">
+                              {idx + 1}. {result.question}
+                            </div>
+                            {result.skill_tested_on && (
+                              <span className="shrink-0 text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
+                                {result.skill_tested_on}
+                              </span>
+                            )}
+                          </div>
+                          {result.options && (
+                            <div className="mb-2 space-y-1">
+                              {result.options.map((opt, optIdx) => {
+                                const optLetter = String.fromCharCode(65 + optIdx);
+                                const isUserAnswer = optLetter === userAnswer;
+                                const isCorrectAnswer = optLetter === correctAnswer;
+                                return (
+                                  <div 
+                                    key={optIdx}
+                                    className={cn(
+                                      "text-sm px-2 py-1 rounded",
+                                      isCorrectAnswer && "bg-green-100 text-green-800 font-medium",
+                                      isUserAnswer && !isCorrectAnswer && "bg-red-100 text-red-800"
+                                    )}
+                                  >
+                                    {opt}
+                                    {isCorrectAnswer && " ✓ (Correct)"}
+                                    {isUserAnswer && !isCorrectAnswer && " (Your answer)"}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                           <div className={cn(
-                            result.is_correct ? "text-green-600" : "text-red-600"
+                            "text-sm font-medium",
+                            isCorrect ? "text-green-600" : "text-red-600"
                           )}>
-                            Your answer: {result.user_response} 
-                            {result.is_correct ? " ✓" : ` (Correct: ${result.correct_answer})`}
+                            {isCorrect ? "✓ Correct" : `✗ Your answer: ${userAnswer} | Correct: ${correctAnswer}`}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+
+                    <div className="pt-2 flex justify-end">
+                      <Button
+                        variant="gradient"
+                        size="sm"
+                        type="button"
+                        disabled={isTyping || isAnalyzingGaps}
+                        onClick={handleAnalyzeGaps}
+                      >
+                        View your gap analysis
+                      </Button>
+                    </div>
                   </div>
                 )}
 
