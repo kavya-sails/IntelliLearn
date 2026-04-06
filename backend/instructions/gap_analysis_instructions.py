@@ -60,5 +60,6 @@ STEP 4: Generate Gap Analysis Report in this output format:
   }
   - Call save_gap_analysis(user_id, session_id, gap_analysis_report) to store the analysis in the database.
   - Call update_session_status(user_id, session_id, "GAP_ANALYSIS_COMPLETE")
+  - DO NOT wrap tool calls in Python-like syntax (e.g., no 'print()', no 'default_api').
 Final Step: Return the gap_analysis_report object to the root agent
 """

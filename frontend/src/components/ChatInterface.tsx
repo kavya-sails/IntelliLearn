@@ -12,12 +12,21 @@ type QuizItem = {
   skill: string;
 };
 
+type QuizResult = {
+  question: string;
+  options?: string[];
+  answer: string;
+  user_response: string;
+  skill_tested_on: string;
+};
+
 interface Message {
   id: string;
   role: "user" | "ai";
   content: string;
   timestamp: Date;
   quiz?: QuizItem[];
+  quizResults?: QuizResult[];
   file?: {
     name: string;
     size: number;
@@ -50,6 +59,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isAnalyzingGaps, setIsAnalyzingGaps] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [quizSelections, setQuizSelections] = useState<Record<string, number[]>>({});
@@ -73,6 +83,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                 id: `hist-${idx}`,
                 role: msg.role === "user" ? "user" : "ai",
                 content: msg.content,
+                quiz: msg.meta?.quiz as QuizItem[] | undefined,
+                quizResults: msg.meta?.quiz_results as QuizResult[] | undefined,
                 timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
               };
 
@@ -386,16 +398,22 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
         throw new Error(`done_quiz failed (${res.status})`);
       }
       const rawData = await res.json();
-      const data = rawData as { session_id?: string | number; message?: string | { message: string }; status?: string };
+      const data = rawData as { 
+        session_id?: string | number; 
+        message?: QuizResult[]; 
+        status?: string 
+      };
       if (data?.session_id != null) {
         localStorage.setItem("session_id", String(data.session_id));
       }
 
+      let quizResults: QuizResult[] = [];
       let messageContent = "Quiz submitted.";
-      if (typeof data?.message === "string") {
-        messageContent = data.message;
-      } else if (data?.message && typeof data.message === "object" && "message" in data.message) {
-        messageContent = String(data.message.message);
+      
+      if (Array.isArray(data?.message)) {
+        quizResults = data.message;
+        const correctCount = quizResults.filter(r => r.user_response === r.answer).length;
+        messageContent = `You answered ${correctCount} out of ${quizResults.length} correctly!`;
       }
 
       setMessages((prev) => [
@@ -404,6 +422,60 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
           id: (Date.now() + 1).toString(),
           role: "ai",
           content: messageContent,
+          timestamp: new Date(),
+          quizResults,
+        },
+      ]);
+    } catch (e) {
+      console.error(e);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content: "Sorry — I couldn't submit your quiz. Please try again.",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleAnalyzeGaps = async () => {
+    if (isTyping || isAnalyzingGaps) return;
+    const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
+    if (!sessionId || !userId) return;
+
+    setIsAnalyzingGaps(true);
+    setIsTyping(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/analyze_gaps`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        throw new Error(`analyze_gaps failed (${res.status})`);
+      }
+      const data = await res.json();
+      const content =
+        typeof data?.message === "string"
+          ? data.message
+          : typeof data?.analysis === "string"
+            ? data.analysis
+            : typeof data?.result === "string"
+              ? data.result
+              : typeof data === "string"
+                ? data
+                : JSON.stringify(data, null, 2);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "ai",
+          content,
           timestamp: new Date(),
         },
       ]);
@@ -414,12 +486,13 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
         {
           id: (Date.now() + 1).toString(),
           role: "ai",
-          content: "Sorry — I couldn’t submit your quiz. Please try again.",
+          content: "Sorry — I couldn't generate your gap analysis right now. Please try again.",
           timestamp: new Date(),
         },
       ]);
     } finally {
       setIsTyping(false);
+      setIsAnalyzingGaps(false);
     }
   };
 
@@ -626,15 +699,89 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                   </div>
                 )}
 
+                {msg.role === "ai" && msg.quizResults && msg.quizResults.length > 0 && (
+                  <div className="mt-3 space-y-3">
+                    {msg.quizResults.map((result, idx) => {
+                      const userAnswer = result.user_response?.trim() || result.user_response;
+                      const correctAnswer = result.answer?.trim() || result.answer;
+                      const isCorrect = userAnswer === correctAnswer;
+                      return (
+                        <div 
+                          key={idx} 
+                          className={cn(
+                            "rounded-xl border p-3",
+                            isCorrect 
+                              ? "border-green-500/50 bg-green-500/10" 
+                              : "border-red-500/50 bg-red-500/10"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="text-sm font-medium">
+                              {idx + 1}. {result.question}
+                            </div>
+                            {result.skill_tested_on && (
+                              <span className="shrink-0 text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
+                                {result.skill_tested_on}
+                              </span>
+                            )}
+                          </div>
+                          {result.options && (
+                            <div className="mb-2 space-y-1">
+                              {result.options.map((opt, optIdx) => {
+                                const optLetter = String.fromCharCode(65 + optIdx);
+                                const isUserAnswer = optLetter === userAnswer;
+                                const isCorrectAnswer = optLetter === correctAnswer;
+                                return (
+                                  <div 
+                                    key={optIdx}
+                                    className={cn(
+                                      "text-sm px-2 py-1 rounded",
+                                      isCorrectAnswer && "bg-green-100 text-green-800 font-medium",
+                                      isUserAnswer && !isCorrectAnswer && "bg-red-100 text-red-800"
+                                    )}
+                                  >
+                                    {opt}
+                                    {isCorrectAnswer && " ✓ (Correct)"}
+                                    {isUserAnswer && !isCorrectAnswer && " (Your answer)"}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <div className={cn(
+                            "text-sm font-medium",
+                            isCorrect ? "text-green-600" : "text-red-600"
+                          )}>
+                            {isCorrect ? "✓ Correct" : `✗ Your answer: ${userAnswer} | Correct: ${correctAnswer}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="pt-2 flex justify-end">
+                      <Button
+                        variant="gradient"
+                        size="sm"
+                        type="button"
+                        disabled={isTyping || isAnalyzingGaps}
+                        onClick={handleAnalyzeGaps}
+                      >
+                        View your gap analysis
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {msg.role === "ai" &&
-                  /are you ready to start the skill assessment quiz\?/i.test(msg.content) && (
+                  !msg.quiz &&
+                  msg.content.toLowerCase().includes("ready to start") && (
                     <div className="mt-3 flex gap-2">
                       <Button variant="gradient" size="sm" onClick={handleStartQuiz} disabled={isTyping}>
                         Yes
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => handleSend("No")} disabled={isTyping}>
+                      {/* <Button variant="outline" size="sm" onClick={() => handleSend("No")} disabled={isTyping}>
                         No
-                      </Button>
+                      </Button> */}
                     </div>
                   )}
               </div>
