@@ -81,6 +81,13 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
     return <Navigate to="/auth" replace />;
   }
 
+  const handleSessionClick = (sessionId: number) => {
+    localStorage.setItem("session_id", String(sessionId));
+    setIsNewChat(false);
+    setChatInstanceKey((k) => k + 1);
+    navigate("/app/chat");
+  };
+
   return (
     <DashboardLayout
       activeTab={activeTab}
@@ -92,6 +99,7 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
         navigate("/auth");
       }}
       onNewChat={handleStartChat}
+      onSessionClick={handleSessionClick}
     >
       <Routes>
         <Route path="chat" element={<ChatInterface key={chatInstanceKey} showWelcome={isNewChat} />} />

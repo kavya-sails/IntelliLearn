@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Brain, MessageSquare, BarChart3, BookOpen, ClipboardCheck, Settings, Search, Plus, LogOut, User, ChevronDown, Menu, X, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ interface DashboardLayoutProps {
   onTabChange: (tab: string) => void;
   onLogout: () => void;
   onNewChat?: () => void;
+  onSessionClick?: (sessionId: number) => void;
 }
 
 const navItems = [
@@ -21,17 +22,51 @@ const navItems = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-const chatHistory = [
-  "Resume Analysis - Apr 1",
-  "Java Learning Path",
-  "Spring Boot Questions",
-  "SQL Practice Session",
-];
-
-const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat, onSessionClick }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sessions, setSessions] = useState<{ id: number; status: string }[]>([]);
+
+  useEffect(() => {
+    console.log("DashboardLayout useEffect running");
+    const userId = localStorage.getItem("user_id");
+    console.log("localStorage user_id:", userId);
+    
+    if (!userId) {
+      console.log("No user_id found in localStorage");
+      return;
+    }
+    
+    const url = `http://localhost:8000/api/user/${userId}/sessions`;
+    console.log("Fetching URL:", url);
+    
+    fetch(url)
+      .then((res) => {
+        console.log("Response status:", res.status);
+        if (!res.ok) {
+          return res.json().then(err => { throw new Error(JSON.stringify(err)); });
+        }
+        return res.json();
+      })
+      .then((data) => {
+        console.log("Sessions data received:", data);
+        setSessions(data.sessions || []);
+      })
+      .catch((err) => console.error("Fetch error:", err));
+  }, []);
+
+  const formatStatus = (status: string) => {
+    const statusMap: Record<string, string> = {
+      COLLECTING_GOAL: "New Session",
+      COLLECTING_RESUME: "Resume Collection",
+      PARSING_SKILLS: "Parsing Skills",
+      AWAITING_QUIZ: "Awaiting Quiz",
+      QUIZ_IN_PROGRESS: "Quiz In Progress",
+      QUIZ_DONE: "Quiz Completed",
+    };
+    return statusMap[status] || status.replace(/_/g, " ");
+  };
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -83,14 +118,19 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
           <div className="px-3 pb-3">
             <p className="text-xs text-muted-foreground font-medium mb-2 px-2">Recent</p>
             <div className="space-y-0.5">
-              {chatHistory.map((chat, i) => (
-                <button
-                  key={i}
-                  className="w-full text-left text-sm text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3 py-2 transition-colors truncate"
-                >
-                  {chat}
-                </button>
-              ))}
+              {sessions.length === 0 ? (
+                <p className="text-sm text-muted-foreground px-3 py-2">No sessions available</p>
+              ) : (
+                sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    onClick={() => onSessionClick?.(session.id)}
+                    className="w-full text-left text-sm text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3 py-2 transition-colors truncate"
+                  >
+                    {formatStatus(session.status)}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         )}
