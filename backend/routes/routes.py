@@ -14,6 +14,7 @@ from services.db_service import (
     update_session_status,
     get_claimed_skills,
     save_user,
+    get_sessions_by_user,
 )
 from models.schemas import (
     ChatMessageRequest,
@@ -32,6 +33,19 @@ logger = logging.getLogger(__name__)
 @router.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+@router.get("/user/{user_id}/sessions")
+async def get_user_sessions(user_id: int):
+    """
+    Get all sessions for a user
+    """
+    sessions = get_sessions_by_user(user_id)
+    return {
+        "user_id": user_id,
+        "sessions": sessions,
+        "count": len(sessions),
+    }
 
 
 @router.post("/user/register", response_model=UserResponse)

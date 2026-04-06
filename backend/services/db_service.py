@@ -58,6 +58,18 @@ def get_session(user_id: int, session_id: int) -> Optional[ChatSession]:
             return ChatSession.model_validate(dict(row)) if row else None
 
 
+def get_sessions_by_user(user_id: int) -> List[Dict[str, Any]]:
+    """Get all sessions for a user"""
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                "SELECT id, status FROM chat_sessions WHERE user_id = %s ORDER BY created_at DESC",
+                (user_id,),
+            )
+            return [
+                {"id": row["id"], "status": row["status"]} for row in cur.fetchall()
+            ]
+
 def update_session_status(
     user_id: int, session_id: int, status: SessionStatus
 ) -> ChatSession:

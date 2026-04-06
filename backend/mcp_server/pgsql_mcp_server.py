@@ -182,7 +182,7 @@ def save_quiz(user_id: int, session_id: int, quiz_json: str) -> dict:
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                """INSERT INTO assessments (user_id, session_id, quiz)
+                """INSERT INTO quiz_results (user_id, session_id, quiz)
                    VALUES (%s, %s, %s::jsonb)
                    ON CONFLICT (session_id)
                    DO UPDATE SET quiz=EXCLUDED.quiz
@@ -204,7 +204,7 @@ def get_quiz_results(user_id: int, session_id: int) -> Optional[dict]:
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                "SELECT * FROM assessments WHERE user_id=%s AND session_id=%s",
+                "SELECT * FROM quiz_results WHERE user_id=%s AND session_id=%s",
                 (user_id, session_id),
             )
             row = cur.fetchone()
