@@ -493,7 +493,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   };
 
   const handleAnalyzeGaps = () => {
-    navigate("/skills");
+    navigate("/app/skills");
   };
 
   const uploadResumeToBackend = async (file: File) => {
