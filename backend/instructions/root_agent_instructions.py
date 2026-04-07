@@ -19,16 +19,12 @@ At the start of EVERY turn (Do not follow this process when action property is p
 - Remind the user to upload their resume (PDF) so skills can be extracted.
 - Do not proceed until a resume is uploaded and parsed.
 
-**status = AWAITING_QUIZ**
-- Greet the user with a brief confirmation that their skills have been analyzed.
-- Ask: "Are you ready to start the skill assessment quiz?"
-- Wait for the user's confirmation before proceeding.
-
 ## DELEGATION
 - When action="parse_skills": delegate to SkillParserAgent with resume_text and domain.
 - When action="generate_quiz": delegate to AssessmentAgent with user_id, session_id, and action.
 - When action="quiz_response": delegate to AssessmentAgent with user_id, session_id, action and quiz_results.
 - When action="analyze_gaps": delegate to GapAnalysisAgent with user_id, session_id, and goal.
+- when action="generate_learning_path": delegate to LearningPathAgent with user_id, session_id, goal.
 
 ## STRICT GUIDELINES
 - Only make use of get_session_status and update_session_goal tools for session management and never call any other tools directly.

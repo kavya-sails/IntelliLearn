@@ -70,6 +70,7 @@ def get_sessions_by_user(user_id: int) -> List[Dict[str, Any]]:
                 {"id": row["id"], "status": row["status"]} for row in cur.fetchall()
             ]
 
+
 def update_session_status(
     user_id: int, session_id: int, status: SessionStatus
 ) -> ChatSession:
@@ -139,6 +140,18 @@ def get_gap_analysis(user_id: int, session_id: int) -> Optional[Dict[str, Any]]:
         with get_cursor(conn) as cur:
             cur.execute(
                 "SELECT analysis, created_at FROM gap_analysis WHERE session_id = %s AND user_id = %s",
+                (session_id, user_id),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def get_learning_resources(user_id: int, session_id: int) -> Optional[Dict[str, Any]]:
+    """Get saved learning resources JSON for a session."""
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                "SELECT resources, created_at FROM learning_resources WHERE session_id = %s AND user_id = %s",
                 (session_id, user_id),
             )
             row = cur.fetchone()

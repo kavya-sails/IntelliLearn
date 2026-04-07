@@ -72,8 +72,9 @@ uvicorn main:app --reload --port 8000
 4. `AWAITING_QUIZ` - Skills extracted, ready for assessment
 5. `QUIZ_IN_PROGRESS` - Assessment in progress (Phase 2)
 6. `QUIZ_DONE` - Assessment completed (Phase 2)
-7. `GAP_DONE` - Gap analysis completed (Phase 3)
-8. `ROADMAP_READY` - Learning path generated (Phase 3)
+7. `GAP_ANALYSIS_COMPLETE` - Gap analysis completed (Phase 3)
+8. `GENERATING_PATH` - Learning path generation started (Phase 3)
+9. `LEARNING_PATH_COMPLETE`- Path generated
 
 ### Database Schema
 - `users` - User accounts

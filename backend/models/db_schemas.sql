@@ -64,3 +64,11 @@ CREATE TABLE IF NOT EXISTS gap_analysis (
     analysis   JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS learning_resources (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+    session_id BIGINT NOT NULL UNIQUE REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    resources   JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT now()
+);

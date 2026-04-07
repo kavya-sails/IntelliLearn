@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import aiAvatar from "@/assets/ai-avatar.png";
 import WelcomeScreen from "./WelcomeScreen";
+import { toast } from "@/hooks/use-toast";
 
 type QuizItem = {
   id: number;
   question: string;
   options: string[];
-  skill: string;
+  skill_tested_on: string;
 };
 
 type QuizResult = {
@@ -67,6 +68,34 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   const [quizSelections, setQuizSelections] = useState<Record<string, number[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
+  const [notified, setNotified] = useState(false);
+
+  useEffect(() => {
+    let interval;
+    const sessionId = localStorage.getItem("session_id");
+    const userId = localStorage.getItem("user_id");
+
+    if (sessionStatus === "GAP_ANALYSIS_IN_PROGRESS") {
+      interval = setInterval(async () => {
+        const res = await fetch(`${API_BASE}/chat/${userId}/${sessionId}/status`);
+        const data = await res.json();
+
+        setSessionStatus(data.status);
+
+        if (data.status === "GAP_ANALYSIS_COMPLETE" || data.status === "LEARNING_PATH_COMPLETE" && !notified) {
+          clearInterval(interval);
+          toast({
+            title: "Gap Analysis Ready 🎉",
+            description: "You can now view your gap analysis.",
+          });
+          setNotified(true);
+        }
+      }, 2000);
+  }
+
+  return () => clearInterval(interval);
+}, [sessionStatus]);
 
   const renderInline = (text: string) => {
     // Supports **bold** and markdown-style links: [label](/app/skills)
@@ -260,7 +289,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
               id: typeof anyIt.id === "number" ? anyIt.id : idx + 1,
               question,
               options,
-              skill,
+              skill_tested_on: skill,
             } satisfies QuizItem;
           })
           .filter((x): x is QuizItem => x !== null);
@@ -328,28 +357,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
       // If only a file was provided (no typed message), call upload-resume endpoint.
       if (fileToUpload && !content) {
         const data = await uploadResumeToBackend(fileToUpload);
-
-        const skills = data?.skills ?? [];
-        const skillLines =
-          skills.length > 0
-            ? skills
-                .map((s) => {
-                  const level = (s.level || "").trim();
-                  const levelPretty = level ? level[0].toUpperCase() + level.slice(1) : "Unknown";
-                  return `- **${s.skill_name}** — ${levelPretty}`;
-                })
-                .join("\n")
-            : "- No skills were extracted.";
-
-        const agentText = [
-          "📄 **Here are your skills extracted from your resume:**",
-          "",
-          skillLines,
-          "",
-          (data?.message || "").trim(),
-        ]
-          .filter(Boolean)
-          .join("\n");
+        const agentText = (data?.message || "").trim();
 
         const showStartQuiz = data?.status === "AWAITING_QUIZ";
 
@@ -423,7 +431,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
       return {
         id: q.id,
         question: q.question,
-        skill_tested_on: q.skill,
+        options: q.options,
+        skill_tested_on: q.skill_tested_on,
         selected_options: selectedIdx.map((oi) => q.options[oi]).filter(Boolean),
       };
     });
@@ -752,7 +761,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                         variant="gradient"
                         size="sm"
                         type="button"
-                        disabled={isTyping}
+                        disabled={isTyping || sessionStatus === "GAP_ANALYSIS_IN_PROGRESS"}
                         onClick={handleAnalyzeGaps}
                       >
                         View your gap analysis
@@ -763,7 +772,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
 
                 {msg.role === "ai" &&
                   !msg.quiz &&
-                  (msg.content.toLowerCase().includes("ready to start") || msg.showStartQuizButton) && (
+                  (msg.showStartQuizButton) && (
                     <div className="mt-3 flex gap-2">
                       <Button variant="gradient" size="sm" onClick={handleStartQuiz} disabled={isTyping}>
                         Yes

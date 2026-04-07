@@ -9,6 +9,7 @@ import logging
 from services.agent_runner import run_agent
 from services.db_service import (
     create_session,
+    get_learning_resources,
     get_session,
     save_chat_message,
     get_chat_history,
@@ -201,7 +202,6 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
             "session_id": session_id,
             "message": reply_text,
             "status": updated_session.status,
-            "skills": skills.skills if skills else [],
         }
 
     except HTTPException:
@@ -399,26 +399,31 @@ async def run_gap_analysis(
             "action": "analyze_gaps",
             "goal": goal,
         }
+        update_session_status(
+            user_id, session_id, SessionStatus.GAP_ANALYSIS_IN_PROGRESS
+        )
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after gap analysis: {agent_response}")
+        await generate_plan(
+            user_id, session_id, SessionStatus.GAP_ANALYSIS_COMPLETE, goal
+        )
 
     except Exception as e:
         logger.exception(f"Error in background gap analysis: {e}")
 
+
 @router.get("/chat/{user_id}/{session_id}/gap_analysis")
 async def get_gap_analysis_for_session(user_id: int, session_id: int):
-    """
-    Retrieve the saved gap analysis for a session from the gap_analysis table.
-    """
     session = get_session(user_id, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.status != SessionStatus.GAP_DONE:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot fetch gap analysis in current state: {session.status}",
-        )
+    if session.status == SessionStatus.GAP_ANALYSIS_IN_PROGRESS:
+        return {
+            "session_id": session_id,
+            "message": "Gap analysis is still in progress. Please check back later.",
+            "status": session.status,
+        }
 
     row = get_gap_analysis(user_id, session_id)
     if not row:
@@ -428,4 +433,48 @@ async def get_gap_analysis_for_session(user_id: int, session_id: int):
         "session_id": session_id,
         "analysis": row.get("analysis", {}),
         "created_at": row.get("created_at"),
+    }
+
+
+async def generate_plan(
+    user_id: int, session_id: int, status: SessionStatus, goal: str
+):
+    try:
+        prompt = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "action": "generate_plan",
+            "goal": goal,
+        }
+        agent_response = await run_agent(prompt, user_id, session_id)
+        logger.info(f"Agent response after starting plan generation: {agent_response}")
+
+    except Exception as e:
+        logger.exception(f"Error in generate_plan: {e}")
+        update_session_status(user_id, session_id, status)
+
+
+@router.get("/chat/{user_id}/{session_id}/status")
+async def get_session_status(user_id: int, session_id: int):
+    session = get_session(user_id, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"session_id": session_id, "status": session.status}
+
+
+@router.get("/chat/{user_id}/{session_id}/learning_path")
+async def get_learning_path(user_id: int, session_id: int):
+    session = get_session(user_id, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status != SessionStatus.LEARNING_PATH_COMPLETE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Learning path not ready. Current session status: {session.status}",
+        )
+    row = get_learning_resources(user_id, session_id)
+    return {
+        "session_id": session_id,
+        "learning_path": row.get("resources", {}) if row else {},
     }
