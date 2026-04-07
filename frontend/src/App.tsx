@@ -104,6 +104,7 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
         setAuthenticated(false);
         localStorage.removeItem("user_id");
         localStorage.removeItem("session_id");
+        localStorage.removeItem("username");
         navigate("/auth");
       }}
       onNewChat={handleStartChat}
@@ -125,7 +126,7 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
 };
 
 const App = () => {
-  const [authenticated, setAuthenticated] = useState(false);
+  const [authenticated, setAuthenticated] = useState(() => !!localStorage.getItem("user_id"));
 
   return (
     <BrowserRouter>

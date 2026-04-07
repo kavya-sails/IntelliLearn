@@ -177,41 +177,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
     }
   }, []);
 
-  const handleStartChat = (type: string) => {
-    setMessages([
-      ...initialMessages,
-      {
-        id: Date.now().toString(),
-        role: "user",
-        content: type,
-        timestamp: new Date(),
-      },
-    ]);
-    setIsTyping(true);
-    
-    setTimeout(() => {
-      const responses: Record<string, string> = {
-        "Resume Analysis": "I'd love to help analyze your resume! Please upload your resume file (PDF, DOCX) using the upload button below, and I'll provide a comprehensive skill analysis.",
-        "Learning Roadmap": "Great choice! I'll create a personalized learning roadmap for you. First, tell me about your career goals and current skill level.",
-        "Skill Assessment": "Let's assess your skills! I'll create a personalized quiz based on your profile. What area would you like to be assessed on?",
-        "AI Recommendations": "Based on current industry trends, I'd be happy to suggest skills to learn. What role are you targeting?",
-      };
-      
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "ai",
-          content: responses[type] || `I understand you want to ${type}. Let me help you with that!`,
-          timestamp: new Date(),
-        },
-      ]);
-      setIsTyping(false);
-    }, 1500);
-  };
-
   if (showWelcome) {
-    return <WelcomeScreen onStartChat={handleStartChat} />;
+    return <WelcomeScreen />;
   }
 
   const isMultiSelectQuestion = (q: string) => {

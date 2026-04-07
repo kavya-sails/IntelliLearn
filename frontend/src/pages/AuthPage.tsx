@@ -42,6 +42,7 @@ const AuthPage = ({ onAuth }: { onAuth: () => void }) => {
         }
         const data = await res.json();
         userId = data.id;
+        localStorage.setItem("username", name.trim());
       } else {
         if (!email.trim() || !password.trim()) {
           setAuthError("Email and Password are required.");
@@ -60,6 +61,7 @@ const AuthPage = ({ onAuth }: { onAuth: () => void }) => {
         }
         const data = await res.json();
         userId = data.id;
+        localStorage.setItem("username", data.name || email.split("@")[0]);
       }
       localStorage.setItem("user_id", userId);
       onAuth();

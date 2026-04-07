@@ -1,9 +1,4 @@
 import { Brain, FileText, Map, ClipboardCheck, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-
-interface WelcomeScreenProps {
-  onStartChat: (type: string) => void;
-}
 
 const features = [
   { icon: FileText, title: "Resume Analysis", desc: "Upload your resume for AI-powered skill extraction" },
@@ -12,7 +7,7 @@ const features = [
   { icon: Sparkles, title: "AI Recommendations", desc: "Discover skills and courses tailored to you" },
 ];
 
-const WelcomeScreen = ({ onStartChat }: WelcomeScreenProps) => {
+const WelcomeScreen = () => {
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 min-h-[calc(100vh-3.5rem)]">
       <div className="max-w-2xl w-full text-center space-y-8 animate-fade-in">
@@ -30,7 +25,6 @@ const WelcomeScreen = ({ onStartChat }: WelcomeScreenProps) => {
           {features.map((feature, i) => (
             <button
               key={i}
-              onClick={() => onStartChat(feature.title)}
               className="flex items-start gap-4 p-4 bg-card border border-border rounded-xl hover:border-primary/30 hover:shadow-md transition-all duration-200 text-left group"
             >
               <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">

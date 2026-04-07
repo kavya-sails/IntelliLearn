@@ -1,6 +1,7 @@
 import { BarChart3, BookOpen, ClipboardCheck, TrendingUp, Sparkles, ArrowRight, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 
 const quickStats = [
   { label: "Overall Score", value: "82%", change: "+7%", icon: TrendingUp, color: "text-success" },
@@ -10,6 +11,13 @@ const quickStats = [
 ];
 
 const DashboardOverview = ({ onNavigate }: { onNavigate: (tab: string) => void }) => {
+  const [username, setUsername] = useState("");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("username");
+    if (stored) setUsername(stored);
+  }, []);
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Welcome */}
@@ -18,7 +26,7 @@ const DashboardOverview = ({ onNavigate }: { onNavigate: (tab: string) => void }
           <Brain className="h-48 w-48 -mt-8 -mr-8" />
         </div>
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-2">Welcome back, John! 👋</h1>
+          <h1 className="text-2xl font-bold mb-2">Welcome back, {username || "there"}! 👋</h1>
           <p className="text-sm opacity-90 max-w-md mb-4">
             You're on a 12-day learning streak. Keep it up! Your Java skills improved by 7% this week.
           </p>
