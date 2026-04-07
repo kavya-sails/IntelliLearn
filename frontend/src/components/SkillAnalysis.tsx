@@ -353,6 +353,19 @@ const READY_STATUSES = new Set([
   "LEARNING_PATH_COMPLETE",
 ]);
 
+function normalizeStatus(status: string | null | undefined): string {
+  return (status ?? "").trim().toUpperCase();
+}
+
+function canShowGapAnalysis(status: string | null | undefined): boolean {
+  return READY_STATUSES.has(normalizeStatus(status));
+}
+
+function shouldPollStatus(status: string | null | undefined): boolean {
+  const s = normalizeStatus(status);
+  return PENDING_STATUSES.has(s) || s === "GAP_ANALYSIS_COMPLETE";
+}
+
 const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
   const { sessionId: sessionIdParam } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -362,6 +375,7 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
   const [error, setError] = useState<string | null>(null);
   const [analysisStatus, setAnalysisStatus] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasFetchedAnalysisRef = useRef(false);
 
   const stopPolling = () => {
     if (pollRef.current) {
@@ -392,33 +406,34 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
     const sessionId = sessionIdParam || localStorage.getItem("session_id");
     if (!userId || !sessionId) return;
 
-    // First check current status
-    fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/status`)
-      .then((r) => r.json())
-      .then((d) => {
-        const status: string = d.status ?? "";
-        setAnalysisStatus(status);
+    hasFetchedAnalysisRef.current = false;
 
-        if (READY_STATUSES.has(status)) {
-          fetchGapAnalysis(userId, sessionId);
-        } else if (PENDING_STATUSES.has(status)) {
-          // Poll until ready
-          pollRef.current = setInterval(() => {
-            fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/status`)
-              .then((r) => r.json())
-              .then((pd) => {
-                const ps: string = pd.status ?? "";
-                setAnalysisStatus(ps);
-                if (READY_STATUSES.has(ps)) {
-                  stopPolling();
-                  fetchGapAnalysis(userId, sessionId);
-                }
-              })
-              .catch(console.error);
-          }, 3000);
+    const maybeFetchGapAnalysis = (status: string) => {
+      if (canShowGapAnalysis(status) && !hasFetchedAnalysisRef.current) {
+        hasFetchedAnalysisRef.current = true;
+        fetchGapAnalysis(userId, sessionId);
+      }
+    };
+
+    const checkStatus = () => {
+      fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/status`)
+        .then((r) => r.json())
+        .then((d) => {
+          const status = normalizeStatus(d.status);
+          setAnalysisStatus(status);
+          maybeFetchGapAnalysis(status);
+
+          if (status === "LEARNING_PATH_COMPLETE") {
+            stopPolling();
+          } else if (shouldPollStatus(status) && !pollRef.current) {
+            pollRef.current = setInterval(checkStatus, 3000);
+          }
         }
-      })
-      .catch(console.error);
+      )
+        .catch(console.error);
+    };
+
+    checkStatus();
 
     return () => stopPolling();
   }, [sessionIdParam]);
@@ -458,6 +473,7 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
   const overestimatedList = resolved.overestimated_skills ?? [];
 
   const chartData = buildChart(resolved);
+  const isLearningPathReady = normalizeStatus(analysisStatus) === "LEARNING_PATH_COMPLETE";
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-y-auto">
@@ -472,6 +488,7 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
               <Button
                 variant="outline"
                 size="sm"
+                disabled={!isLearningPathReady}
                 onClick={() => {
                   const userId = localStorage.getItem("user_id");
                   const sessionId = sessionIdParam || localStorage.getItem("session_id");
