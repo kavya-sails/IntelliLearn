@@ -40,7 +40,7 @@ const initialMessages: Message[] = [
   {
     id: "1",
     role: "ai",
-    content: "👋 Hello! I'm your IntelliLearn AI assistant. I can analyze your resume, identify skill gaps, create personalized learning roadmaps, and help you prepare for assessments.\n\nHow can I help you today?",
+    content: "👋 Hello! I'm your IntelliLearn AI assistant. I can analyze your resume based on your career goal, identify skill gaps, create personalized learning roadmaps. Please provide your career goal.",
     timestamp: new Date(),
   },
 ];
@@ -55,6 +55,7 @@ const ChatInterface = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [quizSelections, setQuizSelections] = useState<Record<string, number[]>>({});
+  const [sessionStatus, setSessionStatus] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,6 +107,7 @@ const ChatInterface = () => {
     // Always reset to initial state when session changes
     setMessages(initialMessages);
     setQuizSelections({});
+    setSessionStatus("");
 
     if (!sessionId) return;
 
@@ -115,6 +117,7 @@ const ChatInterface = () => {
     ])
       .then(([historyData, statusData]) => {
         const sessionStatus: string = statusData?.status ?? "";
+        setSessionStatus(sessionStatus);
 
         let historicalMessages: Message[] = [];
         if (historyData.messages && historyData.messages.length > 0) {
@@ -310,6 +313,7 @@ const ChatInterface = () => {
         const data = await uploadResumeToBackend(fileToUpload);
         const agentText = (data?.message || "").trim();
 
+        if (data?.status) setSessionStatus(data.status);
         const showStartQuiz = data?.status === "AWAITING_QUIZ";
 
         setMessages((prev) => [
@@ -351,6 +355,8 @@ const ChatInterface = () => {
       if (data?.session_id) {
         localStorage.setItem("session_id", String(data.session_id));
       }
+
+      if (data?.status) setSessionStatus(data.status);
 
       if (data?.message) {
         setMessages((prev) => [
@@ -779,6 +785,7 @@ const ChatInterface = () => {
               size="icon"
               className="shrink-0 text-muted-foreground hover:text-primary"
               onClick={() => fileInputRef.current?.click()}
+              disabled={sessionStatus !== "COLLECTING_RESUME"}
             >
               <Upload className="h-5 w-5" />
             </Button>

@@ -36,7 +36,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
     const userId = localStorage.getItem("user_id");
     if (!userId) return;
     
-    const url = `http://localhost:8000/api/user/${userId}/sessions?size=5`;
+    const url = `http://localhost:8000/api/user/${userId}/sessions?size=10`;
     fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch");

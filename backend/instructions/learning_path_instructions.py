@@ -9,18 +9,30 @@ WORKFLOW:
    - Ensure the entire plan is sufficient to bridge the identified skill gaps within the chosen timeframe.
 
 3. Generate the learning path in the below strict json format and save it using the save_learning_resources tool.
-    Learning Path Format:
+    Learning Path Format: Each item must contain the week and resources. Each resource must contain a title, description, and link.
     [
-        "week-1":
-            [
+        {
+            "week": "week-1",
+            "resources": [
                 {
-                    "title": "Introduction to Python",          
+                    "title": "Introduction to Python",
                     "description": "A beginner-friendly course to learn Python programming.",
                     "link": "https://www.example.com/python-course"
                 },
                 ...
-            ],
-        ...
+            ]
+        },
+        {
+            "week": "week-2",
+            "resources": [
+                {
+                    "title": "Advanced Python",
+                    "description": "Deep dive into advanced Python concepts.",
+                    "link": "https://www.example.com/advanced-python"
+                },
+                ...
+            ]
+        }
     ]
 
 4. Do not include any resources that are not relevant to the user's goal and gap analysis.
