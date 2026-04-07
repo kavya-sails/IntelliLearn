@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Brain, MessageSquare, BarChart3, BookOpen, ClipboardCheck, Settings, Search, Plus, LogOut, User, ChevronDown, Menu, X, TrendingUp } from "lucide-react";
+import { Brain, MessageSquare, BarChart3, BookOpen, ClipboardCheck, Search, Plus, LogOut, User, ChevronDown, Menu, X, TrendingUp, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -21,7 +21,6 @@ const navItems = [
   { id: "skills", label: "Skill Analysis", icon: TrendingUp },
   { id: "roadmap", label: "Learning Plan", icon: BookOpen },
   { id: "assessments", label: "Assessments", icon: ClipboardCheck },
-  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat, onSessionClick, refreshKey, currentSessionId }: DashboardLayoutProps) => {
@@ -29,8 +28,7 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sessions, setSessions] = useState<{ id: number; status: string }[]>([]);
-  useEffect(() => {
-    console.log("DashboardLayout useEffect running");
+  const [darkMode, setDarkMode] = useState(false);
 
   const fetchSessions = () => {
     const userId = localStorage.getItem("user_id");
@@ -53,6 +51,18 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
   useEffect(() => {
     fetchSessions();
   }, [refreshKey]);
+
+  useEffect(() => {
+    const storedDark = localStorage.getItem("darkMode");
+    if (storedDark !== null) {
+      setDarkMode(storedDark === "true");
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    localStorage.setItem("darkMode", darkMode ? "true" : "false");
+  }, [darkMode]);
 
   const formatStatus = (status: string) => {
     const statusMap: Record<string, string> = {
@@ -184,34 +194,41 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
             </h2>
           </div>
 
-          <div className="relative">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setProfileOpen(!profileOpen)}
-              className="flex items-center gap-2 p-2 hover:bg-secondary rounded-lg transition-colors"
+              onClick={() => setDarkMode((prev) => !prev)}
+              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              aria-label="Toggle dark mode"
             >
-              <div className="h-8 w-8 rounded-full gradient-primary flex items-center justify-center">
-                <User className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
-            {profileOpen && (
-              <div className="absolute right-0 top-12 w-48 bg-card border border-border rounded-xl shadow-lg py-2 animate-fade-in">
-                <button className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2">
-                  <User className="h-4 w-4" /> Profile
-                </button>
-                <button className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2">
-                  <Settings className="h-4 w-4" /> Settings
-                </button>
-                <div className="border-t border-border my-1" />
-                <button
-                  onClick={onLogout}
-                  className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-secondary transition-colors flex items-center gap-2"
-                >
-                  <LogOut className="h-4 w-4" /> Logout
-                </button>
-              </div>
-            )}
+            <div className="relative">
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="flex items-center gap-2 p-2 hover:bg-secondary rounded-lg transition-colors"
+              >
+                <div className="h-8 w-8 rounded-full gradient-primary flex items-center justify-center">
+                  <User className="h-4 w-4 text-primary-foreground" />
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </button>
+
+              {profileOpen && (
+                <div className="absolute right-0 top-12 w-48 bg-card border border-border rounded-xl shadow-lg py-2 animate-fade-in">
+                  <button className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition-colors flex items-center gap-2">
+                    <User className="h-4 w-4" /> Profile
+                  </button>
+                  <div className="border-t border-border my-1" />
+                  <button
+                    onClick={onLogout}
+                    className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-secondary transition-colors flex items-center gap-2"
+                  >
+                    <LogOut className="h-4 w-4" /> Logout
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
