@@ -29,30 +29,36 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
   const [activeTab, setActiveTab] = useState(routeToTab(location.pathname));
   const [isNewChat, setIsNewChat] = useState(true);
   const [chatInstanceKey, setChatInstanceKey] = useState(0);
+  const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     const tab = routeToTab(location.pathname);
     setActiveTab(tab);
-    if (tab === "chat") {
-      setIsNewChat(true);
-    }
   }, [location.pathname]);
+
+  useEffect(() => {
+    const sessionId = localStorage.getItem("session_id");
+    if (sessionId) {
+      setIsNewChat(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setCurrentSessionId(localStorage.getItem("session_id"));
+  }, [chatInstanceKey, sessionRefreshKey]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
-    if (tab === "chat") {
-      setIsNewChat(true);
-    }
     navigate(`/app/${tab}`);
   };
 
   const handleStartChat = async () => {
-    // Always reset Chat UI and create a fresh backend session.
-    // We want to open ChatInterface directly (not WelcomeScreen).
     setIsNewChat(false);
     setChatInstanceKey((k) => k + 1);
     navigate("/app/chat");
     localStorage.removeItem("session_id");
+    setCurrentSessionId(null);
 
     const userId = localStorage.getItem("user_id");
     if (!userId) {
@@ -71,7 +77,10 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
       const data = await res.json();
       if (data?.session_id) {
         localStorage.setItem("session_id", String(data.session_id));
+        setCurrentSessionId(String(data.session_id));
       }
+      
+      setSessionRefreshKey((k) => k + 1);
     } catch (error) {
       console.error("Failed to start new chat session:", error);
     }
@@ -83,6 +92,7 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
 
   const handleSessionClick = (sessionId: number) => {
     localStorage.setItem("session_id", String(sessionId));
+    setCurrentSessionId(String(sessionId));
     setIsNewChat(false);
     setChatInstanceKey((k) => k + 1);
     navigate("/app/chat");
@@ -100,6 +110,8 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
       }}
       onNewChat={handleStartChat}
       onSessionClick={handleSessionClick}
+      refreshKey={sessionRefreshKey}
+      currentSessionId={currentSessionId}
     >
       <Routes>
         <Route path="chat" element={<ChatInterface key={chatInstanceKey} showWelcome={isNewChat} />} />

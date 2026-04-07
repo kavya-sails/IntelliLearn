@@ -11,6 +11,8 @@ interface DashboardLayoutProps {
   onLogout: () => void;
   onNewChat?: () => void;
   onSessionClick?: (sessionId: number) => void;
+  refreshKey?: number;
+  currentSessionId?: string | null;
 }
 
 const navItems = [
@@ -22,39 +24,31 @@ const navItems = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
-const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat, onSessionClick }: DashboardLayoutProps) => {
+const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat, onSessionClick, refreshKey, currentSessionId }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sessions, setSessions] = useState<{ id: number; status: string }[]>([]);
 
-  useEffect(() => {
-    console.log("DashboardLayout useEffect running");
+  const fetchSessions = () => {
     const userId = localStorage.getItem("user_id");
-    console.log("localStorage user_id:", userId);
-    
-    if (!userId) {
-      console.log("No user_id found in localStorage");
-      return;
-    }
+    if (!userId) return;
     
     const url = `http://localhost:8000/api/user/${userId}/sessions`;
-    console.log("Fetching URL:", url);
-    
     fetch(url)
       .then((res) => {
-        console.log("Response status:", res.status);
-        if (!res.ok) {
-          return res.json().then(err => { throw new Error(JSON.stringify(err)); });
-        }
+        if (!res.ok) throw new Error("Failed to fetch");
         return res.json();
       })
       .then((data) => {
-        console.log("Sessions data received:", data);
         setSessions(data.sessions || []);
       })
       .catch((err) => console.error("Fetch error:", err));
-  }, []);
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, [refreshKey]);
 
   const formatStatus = (status: string) => {
     const statusMap: Record<string, string> = {
@@ -89,7 +83,6 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
             variant="gradient"
             className={cn("w-full", !sidebarOpen && "px-2")}
             onClick={() => {
-              onTabChange("chat");
               onNewChat?.();
             }}
           >
@@ -125,7 +118,12 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
                   <button
                     key={session.id}
                     onClick={() => onSessionClick?.(session.id)}
-                    className="w-full text-left text-sm text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg px-3 py-2 transition-colors truncate"
+                    className={cn(
+                      "w-full text-left text-sm rounded-lg px-3 py-2 transition-colors truncate",
+                      currentSessionId === String(session.id)
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    )}
                   >
                     {formatStatus(session.status)}
                   </button>
