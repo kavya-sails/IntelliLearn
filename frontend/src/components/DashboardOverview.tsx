@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, ClipboardCheck, TrendingUp, Sparkles, ArrowRight, Brain } from "lucide-react";
+import { BarChart3, BookOpen, TrendingUp, Sparkles, ArrowRight, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -7,7 +7,7 @@ const quickStats = [
   { label: "Overall Score", value: "82%", change: "+7%", icon: TrendingUp, color: "text-success" },
   { label: "Skills Tracked", value: "10", change: "+2", icon: BarChart3, color: "text-primary" },
   { label: "Lessons Done", value: "24", change: "+3", icon: BookOpen, color: "text-accent" },
-  { label: "Assessments", value: "8", change: "+1", icon: ClipboardCheck, color: "text-warning" },
+  { label: "Assessments", value: "8", change: "+1", icon: Brain, color: "text-warning" },
 ];
 
 const DashboardOverview = ({ onNavigate }: { onNavigate: (tab: string) => void }) => {
@@ -19,7 +19,8 @@ const DashboardOverview = ({ onNavigate }: { onNavigate: (tab: string) => void }
   }, []);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-y-auto">
+      <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Welcome */}
       <div className="gradient-primary rounded-2xl p-8 text-primary-foreground relative overflow-hidden">
         <div className="absolute top-0 right-0 opacity-10">
@@ -39,6 +40,7 @@ const DashboardOverview = ({ onNavigate }: { onNavigate: (tab: string) => void }
             Continue Learning <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
+      </div>
       </div>
 
       {/* Stats */}
@@ -61,8 +63,8 @@ const DashboardOverview = ({ onNavigate }: { onNavigate: (tab: string) => void }
       <div className="grid md:grid-cols-3 gap-4">
         {[
           { title: "Skill Analysis", desc: "View your detailed skill breakdown", icon: TrendingUp, tab: "skills", color: "text-primary" },
-          { title: "Assessments", desc: "Take a quiz to test your knowledge", icon: ClipboardCheck, tab: "assessments", color: "text-accent" },
           { title: "Learning Plan", desc: "Follow your personalized roadmap", icon: BookOpen, tab: "roadmap", color: "text-success" },
+          { title: "Progress", desc: "Track your learning journey", icon: TrendingUp, tab: "progress", color: "text-accent" },
         ].map((action, i) => (
           <button
             key={action.tab}

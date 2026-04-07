@@ -5,7 +5,6 @@ import DashboardLayout from "./components/DashboardLayout";
 import ChatInterface from "./components/ChatInterface";
 import WelcomeScreen from "./components/WelcomeScreen";
 import SkillAnalysis from "./components/SkillAnalysis";
-import AssessmentPage from "./components/AssessmentPage";
 import LearningRoadmap from "./components/LearningRoadmap";
 import ProgressTracking from "./components/ProgressTracking";
 import DashboardOverview from "./components/DashboardOverview";
@@ -17,7 +16,6 @@ const routeToTab = (path: string) => {
   if (path.startsWith("/app/dashboard")) return "dashboard";
   if (path.startsWith("/app/skills")) return "skills";
   if (path.startsWith("/app/roadmap")) return "roadmap";
-  if (path.startsWith("/app/assessments")) return "assessments";
   return "chat";
 };
 
@@ -89,8 +87,8 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
         <Route path="dashboard" element={<DashboardOverview onNavigate={handleTabChange} />} />
         <Route path="skills" element={<SkillAnalysis />} />
         <Route path="skills/:sessionId" element={<SkillAnalysis />} />
-        <Route path="assessments" element={<AssessmentPage />} />
         <Route path="roadmap" element={<LearningRoadmap />} />
+        <Route path="roadmap/:sessionId" element={<LearningRoadmap />} />
         <Route path="progress" element={<ProgressTracking />} />
         <Route path="*" element={<Navigate to="chat" replace />} />
       </Routes>

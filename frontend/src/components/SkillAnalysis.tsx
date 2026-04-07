@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
-import { BarChart3, Sparkles } from "lucide-react";
+import { useParams, useNavigate } from "react-router-dom";
+import { BarChart3, Sparkles, BookOpen } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,6 +13,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
@@ -354,6 +355,7 @@ const READY_STATUSES = new Set([
 
 const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
   const { sessionId: sessionIdParam } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const storageData = useMemo(() => readGapAnalysisFromStorage(), []);
   const [serverData, setServerData] = useState<SkillGapAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -458,17 +460,38 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
   const chartData = buildChart(resolved);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold">Skill Gap Analysis</h1>
-          <p className="text-muted-foreground text-sm mt-1">Dashboard view of your current readiness</p>
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-y-auto">
+      <div className="p-6 max-w-6xl mx-auto space-y-6 animate-fade-in">
+        <div className="sticky top-0 bg-background z-10 pt-2 pb-4 border-b border-border">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold">Skill Gap Analysis</h1>
+              <p className="text-muted-foreground text-sm mt-1">Dashboard view of your current readiness</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const userId = localStorage.getItem("user_id");
+                  const sessionId = sessionIdParam || localStorage.getItem("session_id");
+                  if (userId && sessionId) {
+                    localStorage.setItem("session_id", sessionId);
+                    navigate(`/app/roadmap/${sessionId}`);
+                  }
+                }}
+                className="gap-1.5"
+              >
+                <BookOpen className="h-4 w-4" />
+                View Learning Road Map
+              </Button>
+              <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium">
+                <BarChart3 className="h-4 w-4" />
+                Product Insights
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium">
-          <BarChart3 className="h-4 w-4" />
-          Product Insights
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
@@ -530,7 +553,7 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
       <InsightText data={resolved} />
 
       <ChartCard title="Skill Scores (0–100)">
-        <div className="h-[360px]">
+        <div className="h-[360px] overflow-auto">
           <Bar data={chartData} options={chartOptions} />
         </div>
         <div className="flex flex-wrap gap-4 mt-4 justify-center text-sm text-muted-foreground">
@@ -553,6 +576,7 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
         <CategoryList title="Missing Skills" tone="missing" items={missingList} />
         <CategoryList title="Overestimated Skills" tone="overestimated" items={overestimatedList} />
       </div>
+    </div>
     </div>
   );
 };
