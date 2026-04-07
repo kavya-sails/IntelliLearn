@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Brain, MessageSquare, BarChart3, BookOpen, ClipboardCheck, Search, Plus, LogOut, User, ChevronDown, Menu, X, TrendingUp, Moon, Sun } from "lucide-react";
+import { Brain, MessageSquare, BarChart3, BookOpen, ClipboardCheck, Search, Plus, LogOut, User, ChevronDown, Menu, X, TrendingUp, Moon, Sun, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,33 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
         setSessions(data.sessions || []);
       })
       .catch((err) => console.error("Fetch error:", err));
+  };
+
+  const handleDeleteSession = async (sessionId: number) => {
+    const ok = window.confirm("Delete this chat session? This action cannot be undone.");
+    if (!ok) return;
+    const userId = localStorage.getItem("user_id");
+    if (!userId) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/user/${userId}/sessions/${sessionId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        throw new Error("Failed to delete session");
+      }
+
+      // If deleted session was active in localStorage, clear it
+      const current = localStorage.getItem("session_id");
+      if (current === String(sessionId)) {
+        localStorage.removeItem("session_id");
+      }
+
+      // Refresh sessions list
+      fetchSessions();
+    } catch (e) {
+      console.error(e);
+      alert("Could not delete session. See console for details.");
+    }
   };
 
   useEffect(() => {
@@ -129,18 +156,29 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
                 <p className="text-sm text-muted-foreground px-3 py-2">No sessions available</p>
               ) : (
                 sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    onClick={() => onSessionClick?.(session.id)}
-                    className={cn(
-                      "w-full text-left text-sm rounded-lg px-3 py-2 transition-colors truncate",
-                      currentSessionId === String(session.id)
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                    )}
+                  <div key={session.id} className="flex items-center gap-2">
+                    <button
+                      onClick={() => onSessionClick?.(session.id)}
+                      className={cn(
+                        "flex-1 text-left text-sm rounded-lg px-3 py-2 transition-colors truncate",
+                        currentSessionId === String(session.id)
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                      )}
                   >
                     {formatStatus(session.status)}
                   </button>
+                  <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSession(session.id);
+                      }}
+                      title="Delete session"
+                      className="p-2 rounded-md hover:bg-secondary text-muted-foreground"
+                    >
+                      <Trash className="h-4 w-4" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>

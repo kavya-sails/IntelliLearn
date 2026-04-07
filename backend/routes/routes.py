@@ -18,6 +18,7 @@ from services.db_service import (
     get_gap_analysis,
     save_user,
     get_sessions_by_user,
+    delete_session,
 )
 from models.schemas import (
     ChatMessageRequest,
@@ -460,6 +461,20 @@ async def get_session_status(user_id: int, session_id: int):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"session_id": session_id, "status": session.status}
+
+
+@router.delete("/user/{user_id}/sessions/{session_id}")
+async def delete_user_session(user_id: int, session_id: int):
+    try:
+        ok = delete_session(user_id, session_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Session not found or could not be deleted")
+        return {"deleted": True, "session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error deleting session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/chat/{user_id}/{session_id}/learning_path")

@@ -156,3 +156,15 @@ def get_learning_resources(user_id: int, session_id: int) -> Optional[Dict[str, 
             )
             row = cur.fetchone()
             return dict(row) if row else None
+
+
+def delete_session(user_id: int, session_id: int) -> bool:
+    """Delete a session and its related data for a user. Returns True if a session row was deleted."""
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                "DELETE FROM chat_sessions WHERE id = %s AND user_id = %s RETURNING id",
+                (session_id, user_id),
+            )
+            row = cur.fetchone()
+            return bool(row)
