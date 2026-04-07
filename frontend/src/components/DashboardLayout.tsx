@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Brain, MessageSquare, BarChart3, BookOpen, ClipboardCheck, Search, Plus, LogOut, User, ChevronDown, Menu, X, TrendingUp, Moon, Sun, Trash } from "lucide-react";
+import { Brain, BarChart3, Search, Plus, LogOut, User, ChevronDown, Menu, Moon, Sun, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -12,16 +12,18 @@ interface DashboardLayoutProps {
   onNewChat?: () => void;
   onSessionClick?: (sessionId: number) => void;
   refreshKey?: number;
-  currentSessionId?: string | null;
+  currentSessionId?: number | null;
 }
 
 const navItems = [
-  { id: "chat", label: "AI Chat", icon: MessageSquare },
+  { id: "chat", label: "About IntelliLearn", icon: Brain },
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { id: "skills", label: "Skill Analysis", icon: TrendingUp },
-  { id: "roadmap", label: "Learning Plan", icon: BookOpen },
-  { id: "assessments", label: "Assessments", icon: ClipboardCheck },
 ];
+
+const tabLabels: Record<string, string> = {
+  chat: "About IntelliLearn",
+  dashboard: "Dashboard",
+};
 
 const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat, onSessionClick, refreshKey, currentSessionId }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -35,8 +37,6 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
     if (!userId) return;
     
     const url = `http://localhost:8000/api/user/${userId}/sessions?size=5`;
-    console.log("Fetching URL:", url);
-    
     fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch");
@@ -91,16 +91,19 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
     localStorage.setItem("darkMode", darkMode ? "true" : "false");
   }, [darkMode]);
 
-  const formatStatus = (status: string) => {
-    const statusMap: Record<string, string> = {
-      COLLECTING_GOAL: "New Session",
-      COLLECTING_RESUME: "Resume Collection",
-      PARSING_SKILLS: "Parsing Skills",
-      AWAITING_QUIZ: "Awaiting Quiz",
-      QUIZ_IN_PROGRESS: "Quiz In Progress",
-      QUIZ_DONE: "Quiz Completed",
+  const statusBadge = (status: string): { label: string; color: string } => {
+    const map: Record<string, { label: string; color: string }> = {
+      COLLECTING_GOAL:        { label: "New",            color: "bg-primary/20 text-primary" },
+      COLLECTING_RESUME:      { label: "Resume",         color: "bg-primary/20 text-primary" },
+      PARSING_SKILLS:         { label: "Parsing",        color: "bg-warning/20 text-warning" },
+      AWAITING_QUIZ:          { label: "Quiz Ready",     color: "bg-warning/20 text-warning" },
+      QUIZ_IN_PROGRESS:       { label: "Quiz",           color: "bg-warning/20 text-warning" },
+      QUIZ_DONE:              { label: "Done",           color: "bg-success/20 text-success" },
+      GAP_ANALYSIS_IN_PROGRESS: { label: "Analyzing",   color: "bg-warning/20 text-warning" },
+      GAP_ANALYSIS_COMPLETE:  { label: "Complete",       color: "bg-success/20 text-success" },
+      LEARNING_PATH_COMPLETE: { label: "Complete",       color: "bg-success/20 text-success" },
     };
-    return statusMap[status] || status.replace(/_/g, " ");
+    return map[status] ?? { label: status.replace(/_/g, " "), color: "bg-secondary text-muted-foreground" };
   };
 
   return (
@@ -160,14 +163,19 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
                     <button
                       onClick={() => onSessionClick?.(session.id)}
                       className={cn(
-                        "flex-1 text-left text-sm rounded-lg px-3 py-2 transition-colors truncate",
-                        currentSessionId === String(session.id)
+                        "flex-1 text-left text-sm rounded-lg px-3 py-2 transition-colors",
+                        currentSessionId === session.id
                           ? "bg-primary/10 text-primary font-medium"
                           : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                       )}
-                  >
-                    {formatStatus(session.status)}
-                  </button>
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium">Chat #{session.id}</span>
+                        <span className={cn("shrink-0 text-xs px-2 py-0.5 rounded-full font-medium", statusBadge(session.status).color)}>
+                          {statusBadge(session.status).label}
+                        </span>
+                      </div>
+                    </button>
                   <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -224,11 +232,10 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 hover:bg-secondary rounded-lg transition-colors"
             >
-              {sidebarOpen ? <X className="h-5 w-5 lg:hidden" /> : <Menu className="h-5 w-5" />}
-              <Menu className="h-5 w-5 hidden lg:block" />
+              <Menu className="h-5 w-5" />
             </button>
             <h2 className="text-sm font-semibold">
-              {navItems.find((i) => i.id === activeTab)?.label || "AI Chat"}
+              {tabLabels[activeTab] || "About IntelliLearn"}
             </h2>
           </div>
 

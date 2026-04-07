@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { BarChart3, Sparkles } from "lucide-react";
 import {
   Chart as ChartJS,
@@ -341,17 +342,33 @@ function readGapAnalysisFromStorage(): SkillGapAnalysisData | null {
   }
 }
 
+const PENDING_STATUSES = new Set([
+  "QUIZ_DONE",
+  "GAP_ANALYSIS_IN_PROGRESS",
+]);
+
+const READY_STATUSES = new Set([
+  "GAP_ANALYSIS_COMPLETE",
+  "LEARNING_PATH_COMPLETE",
+]);
+
 const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
+  const { sessionId: sessionIdParam } = useParams<{ sessionId: string }>();
   const storageData = useMemo(() => readGapAnalysisFromStorage(), []);
   const [serverData, setServerData] = useState<SkillGapAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    const userId = localStorage.getItem("user_id");
-    const sessionId = localStorage.getItem("session_id");
-    if (!userId || !sessionId) return;
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
 
+  const fetchGapAnalysis = (userId: string, sessionId: string) => {
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/gap_analysis`)
@@ -366,7 +383,67 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
       })
       .catch((e) => setError(e?.message || "Failed to load gap analysis."))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    const userId = localStorage.getItem("user_id");
+    const sessionId = sessionIdParam || localStorage.getItem("session_id");
+    if (!userId || !sessionId) return;
+
+    // First check current status
+    fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/status`)
+      .then((r) => r.json())
+      .then((d) => {
+        const status: string = d.status ?? "";
+        setAnalysisStatus(status);
+
+        if (READY_STATUSES.has(status)) {
+          fetchGapAnalysis(userId, sessionId);
+        } else if (PENDING_STATUSES.has(status)) {
+          // Poll until ready
+          pollRef.current = setInterval(() => {
+            fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/status`)
+              .then((r) => r.json())
+              .then((pd) => {
+                const ps: string = pd.status ?? "";
+                setAnalysisStatus(ps);
+                if (READY_STATUSES.has(ps)) {
+                  stopPolling();
+                  fetchGapAnalysis(userId, sessionId);
+                }
+              })
+              .catch(console.error);
+          }, 3000);
+        }
+      })
+      .catch(console.error);
+
+    return () => stopPolling();
+  }, [sessionIdParam]);
+
+  // Show pending state while analysis is being generated
+  const isPending = sessionIdParam && analysisStatus !== null && PENDING_STATUSES.has(analysisStatus) && !serverData;
+
+  if (isPending) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto flex flex-col items-center justify-center min-h-[60vh] gap-6 animate-fade-in">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="h-14 w-14 rounded-full gradient-primary flex items-center justify-center animate-pulse">
+            <BarChart3 className="h-7 w-7 text-primary-foreground" />
+          </div>
+          <h2 className="text-xl font-bold">Analyzing your skill gaps…</h2>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            We're processing your quiz results and building your personalized gap analysis. This usually takes a few seconds.
+          </p>
+          <div className="flex gap-1.5 mt-2">
+            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const resolved = data ?? serverData ?? storageData ?? DEMO_DATA;
 

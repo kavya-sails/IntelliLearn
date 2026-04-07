@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import AuthPage from "./pages/AuthPage";
 import DashboardLayout from "./components/DashboardLayout";
 import ChatInterface from "./components/ChatInterface";
+import WelcomeScreen from "./components/WelcomeScreen";
 import SkillAnalysis from "./components/SkillAnalysis";
 import AssessmentPage from "./components/AssessmentPage";
 import LearningRoadmap from "./components/LearningRoadmap";
@@ -17,7 +18,6 @@ const routeToTab = (path: string) => {
   if (path.startsWith("/app/skills")) return "skills";
   if (path.startsWith("/app/roadmap")) return "roadmap";
   if (path.startsWith("/app/assessments")) return "assessments";
-  if (path.startsWith("/app/progress")) return "progress";
   return "chat";
 };
 
@@ -25,60 +25,34 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
   const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(routeToTab(location.pathname));
-  const [isNewChat, setIsNewChat] = useState(true);
-  const [chatInstanceKey, setChatInstanceKey] = useState(0);
   const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
 
   useEffect(() => {
-    const tab = routeToTab(location.pathname);
-    setActiveTab(tab);
+    setActiveTab(routeToTab(location.pathname));
   }, [location.pathname]);
 
-  useEffect(() => {
-    const sessionId = localStorage.getItem("session_id");
-    if (sessionId) {
-      setIsNewChat(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    setCurrentSessionId(localStorage.getItem("session_id"));
-  }, [chatInstanceKey, sessionRefreshKey]);
-
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
     navigate(`/app/${tab}`);
   };
 
   const handleStartChat = async () => {
-    setIsNewChat(false);
-    setChatInstanceKey((k) => k + 1);
-    navigate("/app/chat");
-    localStorage.removeItem("session_id");
-    setCurrentSessionId(null);
-
     const userId = localStorage.getItem("user_id");
-    if (!userId) {
-      return;
-    }
+    if (!userId) return;
 
     try {
       const res = await fetch(`${API_BASE}/chat/new?user_id=${encodeURIComponent(userId)}`, {
         method: "POST",
       });
-
-      if (!res.ok) {
-        throw new Error(`Failed to start new chat: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Failed to start new chat: ${res.status}`);
 
       const data = await res.json();
       if (data?.session_id) {
-        localStorage.setItem("session_id", String(data.session_id));
-        setCurrentSessionId(String(data.session_id));
+        const sid = Number(data.session_id);
+        setCurrentSessionId(sid);
+        setSessionRefreshKey((k) => k + 1);
+        navigate(`/app/chat/${sid}`);
       }
-      
-      setSessionRefreshKey((k) => k + 1);
     } catch (error) {
       console.error("Failed to start new chat session:", error);
     }
@@ -89,11 +63,8 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
   }
 
   const handleSessionClick = (sessionId: number) => {
-    localStorage.setItem("session_id", String(sessionId));
-    setCurrentSessionId(String(sessionId));
-    setIsNewChat(false);
-    setChatInstanceKey((k) => k + 1);
-    navigate("/app/chat");
+    setCurrentSessionId(sessionId);
+    navigate(`/app/chat/${sessionId}`);
   };
 
   return (
@@ -113,9 +84,11 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
       currentSessionId={currentSessionId}
     >
       <Routes>
-        <Route path="chat" element={<ChatInterface key={chatInstanceKey} showWelcome={isNewChat} />} />
+        <Route path="chat" element={<WelcomeScreen />} />
+        <Route path="chat/:sessionId" element={<ChatInterface />} />
         <Route path="dashboard" element={<DashboardOverview onNavigate={handleTabChange} />} />
         <Route path="skills" element={<SkillAnalysis />} />
+        <Route path="skills/:sessionId" element={<SkillAnalysis />} />
         <Route path="assessments" element={<AssessmentPage />} />
         <Route path="roadmap" element={<LearningRoadmap />} />
         <Route path="progress" element={<ProgressTracking />} />

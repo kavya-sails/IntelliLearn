@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { Send, Upload, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import aiAvatar from "@/assets/ai-avatar.png";
-import WelcomeScreen from "./WelcomeScreen";
-import { toast } from "@/hooks/use-toast";
+
 
 type QuizItem = {
   id: number;
@@ -46,12 +45,9 @@ const initialMessages: Message[] = [
   },
 ];
 
-interface ChatInterfaceProps {
-  showWelcome?: boolean;
-}
-
-const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
+const ChatInterface = () => {
   const navigate = useNavigate();
+  const { sessionId: sessionIdParam } = useParams<{ sessionId: string }>();
   const API_BASE = "http://localhost:8000/api";
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -61,34 +57,6 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   const [quizSelections, setQuizSelections] = useState<Record<string, number[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
-  const [notified, setNotified] = useState(false);
-
-  useEffect(() => {
-    let interval;
-    const sessionId = localStorage.getItem("session_id");
-    const userId = localStorage.getItem("user_id");
-
-    if (sessionStatus === "GAP_ANALYSIS_IN_PROGRESS") {
-      interval = setInterval(async () => {
-        const res = await fetch(`${API_BASE}/chat/${userId}/${sessionId}/status`);
-        const data = await res.json();
-
-        setSessionStatus(data.status);
-
-        if (data.status === "GAP_ANALYSIS_COMPLETE" || data.status === "LEARNING_PATH_COMPLETE" && !notified) {
-          clearInterval(interval);
-          toast({
-            title: "Gap Analysis Ready 🎉",
-            description: "You can now view your gap analysis.",
-          });
-          setNotified(true);
-        }
-      }, 2000);
-  }
-
-  return () => clearInterval(interval);
-}, [sessionStatus]);
 
   const renderInline = (text: string) => {
     // Supports **bold** and markdown-style links: [label](/app/skills)
@@ -126,60 +94,83 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   }, [messages]);
 
   useEffect(() => {
-    const sessionId = localStorage.getItem("session_id");
-    const userId = localStorage.getItem("user_id");
-    if (sessionId) {
-      fetch(`${API_BASE}/chat/${userId}/${sessionId}/history`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.messages && data.messages.length > 0) {
-            const historicalMessages: Message[] = data.messages.map((msg: { role: string; content: string; created_at?: string; meta?: Record<string, unknown> | null }, idx: number) => {
-              const metaRec = msg.meta && typeof msg.meta === "object" ? msg.meta : null;
-              const quiz = Array.isArray(metaRec?.quiz) ? (metaRec.quiz as QuizItem[]) : undefined;
-              const quizResults = Array.isArray(metaRec?.quiz_results) ? (metaRec.quiz_results as QuizResult[]) : undefined;
-              const message: Message = {
-                id: `hist-${idx}`,
-                role: msg.role === "user" ? "user" : "ai",
-                content: msg.content,
-                quiz,
-                quizResults,
-                timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
-              };
+    if (sessionIdParam) {
+      localStorage.setItem("session_id", sessionIdParam);
+    }
+  }, [sessionIdParam]);
 
-              if (msg.meta && typeof msg.meta === "object") {
-                const meta = msg.meta as Record<string, unknown>;
-                if (meta.action === "generate_quiz" || meta.action === "quiz_response") {
-                  const quizMatch = msg.content.match(/\{[^}]+\}/g);
-                  if (quizMatch) {
-                    try {
-                      const parsed = JSON.parse(quizMatch.join(""));
-                      if (Array.isArray(parsed)) {
-                        message.quiz = parsed.map((q, qi) => ({
-                          id: typeof q.id === "number" ? q.id : qi + 1,
-                          question: q.question || "",
-                          options: Array.isArray(q.options) ? q.options.map(String) : [],
-                          skill: q.skill_tested_on || q.skill || "",
-                        }));
-                      }
-                    } catch {
-                      // ignore malformed historical payloads
+  useEffect(() => {
+    const sessionId = sessionIdParam;
+    const userId = localStorage.getItem("user_id");
+
+    // Always reset to initial state when session changes
+    setMessages(initialMessages);
+    setQuizSelections({});
+
+    if (!sessionId) return;
+
+    Promise.all([
+      fetch(`${API_BASE}/chat/${userId}/${sessionId}/history`).then((r) => r.json()),
+      fetch(`${API_BASE}/chat/${userId}/${sessionId}/status`).then((r) => r.json()),
+    ])
+      .then(([historyData, statusData]) => {
+        const sessionStatus: string = statusData?.status ?? "";
+
+        let historicalMessages: Message[] = [];
+        if (historyData.messages && historyData.messages.length > 0) {
+          historicalMessages = historyData.messages.map((msg: { role: string; content: string; created_at?: string; meta?: Record<string, unknown> | null }, idx: number) => {
+            const metaRec = msg.meta && typeof msg.meta === "object" ? msg.meta : null;
+            const quiz = Array.isArray(metaRec?.quiz) ? (metaRec.quiz as QuizItem[]) : undefined;
+            const quizResults = Array.isArray(metaRec?.quiz_results) ? (metaRec.quiz_results as QuizResult[]) : undefined;
+            const message: Message = {
+              id: `hist-${idx}`,
+              role: msg.role === "user" ? "user" : "ai",
+              content: msg.content,
+              quiz,
+              quizResults,
+              timestamp: msg.created_at ? new Date(msg.created_at) : new Date(),
+            };
+
+            if (msg.meta && typeof msg.meta === "object") {
+              const meta = msg.meta as Record<string, unknown>;
+              if (meta.action === "generate_quiz" || meta.action === "quiz_response") {
+                const quizMatch = msg.content.match(/\{[^}]+\}/g);
+                if (quizMatch) {
+                  try {
+                    const parsed = JSON.parse(quizMatch.join(""));
+                    if (Array.isArray(parsed)) {
+                      message.quiz = parsed.map((q, qi) => ({
+                        id: typeof q.id === "number" ? q.id : qi + 1,
+                        question: q.question || "",
+                        options: Array.isArray(q.options) ? q.options.map(String) : [],
+                        skill_tested_on: q.skill_tested_on || q.skill || "",
+                      }));
                     }
+                  } catch {
+                    // ignore malformed historical payloads
                   }
                 }
               }
+            }
 
-              return message;
-            });
-            setMessages([...initialMessages, ...historicalMessages]);
+            return message;
+          });
+
+          // If session is awaiting quiz, mark the last AI message to show the start-quiz button
+          if (sessionStatus === "AWAITING_QUIZ") {
+            for (let i = historicalMessages.length - 1; i >= 0; i--) {
+              if (historicalMessages[i].role === "ai") {
+                historicalMessages[i] = { ...historicalMessages[i], showStartQuizButton: true };
+                break;
+              }
+            }
           }
-        })
-        .catch(console.error);
-    }
-  }, []);
+        }
 
-  if (showWelcome) {
-    return <WelcomeScreen />;
-  }
+        setMessages([...initialMessages, ...historicalMessages]);
+      })
+      .catch(console.error);
+  }, [sessionIdParam]);
 
   const isMultiSelectQuestion = (q: string) => {
     const s = q.toLowerCase();
@@ -453,7 +444,8 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
   };
 
   const handleAnalyzeGaps = () => {
-    navigate("/app/skills");
+    const sid = sessionIdParam || localStorage.getItem("session_id");
+    navigate(`/app/skills/${sid}`);
   };
 
   const uploadResumeToBackend = async (file: File) => {
@@ -719,7 +711,7 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                         variant="gradient"
                         size="sm"
                         type="button"
-                        disabled={isTyping || sessionStatus === "GAP_ANALYSIS_IN_PROGRESS"}
+                        disabled={isTyping}
                         onClick={handleAnalyzeGaps}
                       >
                         View your gap analysis
