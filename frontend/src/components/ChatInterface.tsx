@@ -625,9 +625,9 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
                             <div className="text-sm font-medium">
                               {q.id}. {q.question}
                             </div>
-                            {q.skill && (
+                            {q.skill_tested_on && (
                               <span className="shrink-0 text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground">
-                                {q.skill}
+                                {q.skill_tested_on}
                               </span>
                             )}
                           </div>
