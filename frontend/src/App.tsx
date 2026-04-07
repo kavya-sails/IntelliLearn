@@ -7,7 +7,6 @@ import SkillAnalysis from "./components/SkillAnalysis";
 import AssessmentPage from "./components/AssessmentPage";
 import LearningRoadmap from "./components/LearningRoadmap";
 import ProgressTracking from "./components/ProgressTracking";
-import SettingsPage from "./components/SettingsPage";
 import DashboardOverview from "./components/DashboardOverview";
 
 const API_BASE = "http://localhost:8000/api";
@@ -19,7 +18,6 @@ const routeToTab = (path: string) => {
   if (path.startsWith("/app/roadmap")) return "roadmap";
   if (path.startsWith("/app/assessments")) return "assessments";
   if (path.startsWith("/app/progress")) return "progress";
-  if (path.startsWith("/app/settings")) return "settings";
   return "chat";
 };
 
@@ -120,7 +118,6 @@ const AppRoutes = ({ authenticated, setAuthenticated }: { authenticated: boolean
         <Route path="assessments" element={<AssessmentPage />} />
         <Route path="roadmap" element={<LearningRoadmap />} />
         <Route path="progress" element={<ProgressTracking />} />
-        <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="chat" replace />} />
       </Routes>
     </DashboardLayout>

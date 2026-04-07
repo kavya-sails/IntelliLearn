@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Send, Upload, Sparkles, FileText, Map, ClipboardCheck, X } from "lucide-react";
+import { Send, Upload, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import aiAvatar from "@/assets/ai-avatar.png";
@@ -36,13 +36,6 @@ interface Message {
     type: string;
   };
 }
-
-const suggestedPrompts = [
-  { icon: FileText, text: "Analyze my resume", color: "text-primary" },
-  { icon: Map, text: "Create learning roadmap", color: "text-success" },
-  { icon: ClipboardCheck, text: "Start assessment", color: "text-accent" },
-  { icon: Sparkles, text: "Suggest skills to learn", color: "text-warning" },
-];
 
 const initialMessages: Message[] = [
   {
@@ -569,8 +562,6 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
     }
   };
 
-  const showSuggestions = messages.length <= 1;
-
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       {/* Messages */}
@@ -805,26 +796,6 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
         </div>
       </div>
 
-      {/* Suggested Prompts */}
-      {showSuggestions && (
-        <div className="max-w-3xl mx-auto px-4 pb-4 w-full">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {suggestedPrompts.map((prompt) => (
-              <button
-                key={prompt.text}
-                onClick={() => handleSend(prompt.text)}
-                className="flex flex-col items-center gap-2 p-4 bg-card border border-border rounded-xl hover:border-primary/30 hover:shadow-md transition-all duration-200 text-center group"
-              >
-                <prompt.icon className={cn("h-5 w-5", prompt.color, "group-hover:scale-110 transition-transform")} />
-                <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                  {prompt.text}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Input Area */}
       <div className="border-t border-border bg-card/50 backdrop-blur-sm p-4">
         <div
@@ -892,9 +863,6 @@ const ChatInterface = ({ showWelcome = false }: ChatInterfaceProps) => {
               </div>
             </div>
           )}
-          <p className="text-center text-xs text-muted-foreground mt-2">
-            IntelliLearn AI can make mistakes. Verify important information.
-          </p>
         </div>
       </div>
     </div>

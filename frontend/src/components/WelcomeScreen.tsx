@@ -13,8 +13,6 @@ const features = [
 ];
 
 const WelcomeScreen = ({ onStartChat }: WelcomeScreenProps) => {
-  const userId = localStorage.getItem("user_id");
-
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 min-h-[calc(100vh-3.5rem)]">
       <div className="max-w-2xl w-full text-center space-y-8 animate-fade-in">
@@ -46,28 +44,6 @@ const WelcomeScreen = ({ onStartChat }: WelcomeScreenProps) => {
           ))}
         </div>
 
-        <div className="pt-8">
-          <p className="text-sm text-muted-foreground mb-4">Or start a conversation...</p>
-          <textarea
-            placeholder="Tell me about your career goals or what you'd like to learn..."
-            className="w-full max-w-lg h-24 resize-none bg-card border border-border rounded-xl p-4 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                const target = e.target as HTMLTextAreaElement;
-                if (target.value.trim()) {
-                  onStartChat(target.value);
-                }
-              }
-            }}
-          />
-          <p className="text-xs text-muted-foreground mt-2">Press Ctrl+Enter to send</p>
-        </div>
-
-        {userId && (
-          <p className="text-xs text-muted-foreground pt-4">
-            Logged in as user #{userId}
-          </p>
-        )}
       </div>
     </div>
   );
