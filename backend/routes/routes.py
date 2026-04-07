@@ -39,11 +39,11 @@ async def health_check():
 
 
 @router.get("/user/{user_id}/sessions")
-async def get_user_sessions(user_id: int):
+async def get_user_sessions(user_id: int,size : int):
     """
     Get all sessions for a user
     """
-    sessions = get_sessions_by_user(user_id)
+    sessions = get_sessions_by_user(user_id, size)
     return {
         "user_id": user_id,
         "sessions": sessions,

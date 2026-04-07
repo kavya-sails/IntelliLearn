@@ -29,12 +29,16 @@ const DashboardLayout = ({ children, activeTab, onTabChange, onLogout, onNewChat
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sessions, setSessions] = useState<{ id: number; status: string }[]>([]);
+  useEffect(() => {
+    console.log("DashboardLayout useEffect running");
 
   const fetchSessions = () => {
     const userId = localStorage.getItem("user_id");
     if (!userId) return;
     
-    const url = `http://localhost:8000/api/user/${userId}/sessions`;
+    const url = `http://localhost:8000/api/user/${userId}/sessions?size=5`;
+    console.log("Fetching URL:", url);
+    
     fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch");
