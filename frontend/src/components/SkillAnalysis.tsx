@@ -12,6 +12,15 @@ import {
   type TooltipItem,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
+import {
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  ResponsiveContainer as ReResponsiveContainer,
+} from "recharts";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -221,6 +230,11 @@ function buildChart(data: SkillGapAnalysisData) {
   };
 }
 
+function getRadarData(data: SkillGapAnalysisData) {
+  const skills = data.skills ?? [];
+  return skills.map((s) => ({ subject: s.name, value: clampScore(s.score) }));
+}
+
 const chartOptions: ChartOptions<"bar"> = {
   responsive: true,
   maintainAspectRatio: false,
@@ -369,7 +383,6 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
       pollRef.current = null;
     }
   };
-
   const fetchGapAnalysis = (userId: string, sessionId: string) => {
     setLoading(true);
     setError(null);
@@ -386,6 +399,7 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
       .catch((e) => setError(e?.message || "Failed to load gap analysis."))
       .finally(() => setLoading(false));
   };
+
 
   useEffect(() => {
     const userId = localStorage.getItem("user_id");
@@ -552,7 +566,29 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
 
       <InsightText data={resolved} />
 
-      <ChartCard title="Skill Scores (0–100)">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Identify Aggregate Gaps">
+          <div className="h-[360px]">
+            <ReResponsiveContainer width="100%" height={360}>
+              <RadarChart data={getRadarData(resolved)} outerRadius={120}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="subject" />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                <Radar
+                  name="Score"
+                  dataKey="value"
+                  stroke="#8884d8"
+                  fill="#8884d8"
+                  fillOpacity={0.6}
+                />
+              </RadarChart>
+            </ReResponsiveContainer>
+          </div>
+          <div className="mt-4 text-sm text-muted-foreground">
+            The radar chart above visualizes your proficiency across different skills. The closer a point is to the outer edge, the stronger you are in that skill. Focus on improving areas where the points are closer to the center to boost your overall readiness.
+          </div>
+        </ChartCard>
+        <ChartCard title="Skill Scores (0–100)">
         <div className="h-[360px] overflow-auto">
           <Bar data={chartData} options={chartOptions} />
         </div>
@@ -569,6 +605,8 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
           ))}
         </div>
       </ChartCard>
+      </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryList title="Strengths" tone="strength" items={strengthsList} />
