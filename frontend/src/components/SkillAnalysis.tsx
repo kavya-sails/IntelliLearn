@@ -12,22 +12,6 @@ import {
   type TooltipItem,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
-import {
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as ReTooltip,
-  Area,
-  ResponsiveContainer as ReResponsiveContainer,
-} from "recharts";
-
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -237,13 +221,6 @@ function buildChart(data: SkillGapAnalysisData) {
   };
 }
 
-
-function getRadarData(data: SkillGapAnalysisData) {
-  const skills = data.skills ?? [];
-  return skills.map((s) => ({ subject: s.name, value: clampScore(s.score) }));
-}
-
-
 const chartOptions: ChartOptions<"bar"> = {
   responsive: true,
   maintainAspectRatio: false,
@@ -366,6 +343,16 @@ function readGapAnalysisFromStorage(): SkillGapAnalysisData | null {
   }
 }
 
+const PENDING_STATUSES = new Set([
+  "QUIZ_DONE",
+  "GAP_ANALYSIS_IN_PROGRESS",
+]);
+
+const READY_STATUSES = new Set([
+  "GAP_ANALYSIS_COMPLETE",
+  "LEARNING_PATH_COMPLETE",
+]);
+
 const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
   const { sessionId: sessionIdParam } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -373,12 +360,17 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
   const [serverData, setServerData] = useState<SkillGapAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    const userId = localStorage.getItem("user_id");
-    const sessionId = localStorage.getItem("session_id");
-    if (!userId || !sessionId) return;
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
 
+  const fetchGapAnalysis = (userId: string, sessionId: string) => {
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/gap_analysis`)
@@ -393,7 +385,67 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
       })
       .catch((e) => setError(e?.message || "Failed to load gap analysis."))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    const userId = localStorage.getItem("user_id");
+    const sessionId = sessionIdParam || localStorage.getItem("session_id");
+    if (!userId || !sessionId) return;
+
+    // First check current status
+    fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/status`)
+      .then((r) => r.json())
+      .then((d) => {
+        const status: string = d.status ?? "";
+        setAnalysisStatus(status);
+
+        if (READY_STATUSES.has(status)) {
+          fetchGapAnalysis(userId, sessionId);
+        } else if (PENDING_STATUSES.has(status)) {
+          // Poll until ready
+          pollRef.current = setInterval(() => {
+            fetch(`${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/status`)
+              .then((r) => r.json())
+              .then((pd) => {
+                const ps: string = pd.status ?? "";
+                setAnalysisStatus(ps);
+                if (READY_STATUSES.has(ps)) {
+                  stopPolling();
+                  fetchGapAnalysis(userId, sessionId);
+                }
+              })
+              .catch(console.error);
+          }, 3000);
+        }
+      })
+      .catch(console.error);
+
+    return () => stopPolling();
+  }, [sessionIdParam]);
+
+  // Show pending state while analysis is being generated
+  const isPending = sessionIdParam && analysisStatus !== null && PENDING_STATUSES.has(analysisStatus) && !serverData;
+
+  if (isPending) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto flex flex-col items-center justify-center min-h-[60vh] gap-6 animate-fade-in">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="h-14 w-14 rounded-full gradient-primary flex items-center justify-center animate-pulse">
+            <BarChart3 className="h-7 w-7 text-primary-foreground" />
+          </div>
+          <h2 className="text-xl font-bold">Analyzing your skill gaps…</h2>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            We're processing your quiz results and building your personalized gap analysis. This usually takes a few seconds.
+          </p>
+          <div className="flex gap-1.5 mt-2">
+            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+            <div className="h-2 w-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const resolved = data ?? serverData ?? storageData ?? DEMO_DATA;
 
@@ -500,29 +552,6 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
 
       <InsightText data={resolved} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Identify Aggregate Gaps">
-          <div className="h-[360px]">
-            <ReResponsiveContainer width="100%" height={360}>
-              <RadarChart data={getRadarData(resolved)} outerRadius={120}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="subject" />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                <Radar
-                  name="Score"
-                  dataKey="value"
-                  stroke="#8884d8"
-                  fill="#8884d8"
-                  fillOpacity={0.6}
-                />
-              </RadarChart>
-            </ReResponsiveContainer>
-          </div>
-          <div className="mt-4 text-sm text-muted-foreground">
-            Your skill scores visualized in a radar chart to identify clusters of strengths and gaps.
-        </div>
-      </ChartCard>
-
       <ChartCard title="Skill Scores (0–100)">
         <div className="h-[360px] overflow-auto">
           <Bar data={chartData} options={chartOptions} />
@@ -540,7 +569,7 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
           ))}
         </div>
       </ChartCard>
-      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryList title="Strengths" tone="strength" items={strengthsList} />
         <CategoryList title="Weaknesses" tone="weakness" items={weaknessesList} />
@@ -551,4 +580,5 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
     </div>
   );
 };
+
 export default SkillAnalysis;
