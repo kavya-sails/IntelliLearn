@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Brain, LogOut, User, ChevronDown, Menu, Moon, Sun } from "lucide-react";
 
 interface DashboardLayoutProps {
@@ -10,6 +11,7 @@ interface DashboardLayoutProps {
 
 
 const DashboardLayout = ({ children, onLogout }: DashboardLayoutProps) => {
+  const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -39,10 +41,13 @@ const DashboardLayout = ({ children, onLogout }: DashboardLayoutProps) => {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/app/home")}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
             <Brain className="h-6 w-6 text-primary" />
             <span className="text-base font-bold gradient-text">IntelliLearn</span>
-          </div>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">

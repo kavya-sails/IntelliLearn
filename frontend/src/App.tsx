@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import AuthPage from "./pages/AuthPage";
+import WelcomePage from "./pages/WelcomePage";
 import DashboardLayout from "./components/DashboardLayout";
 import FlowPage from "./components/FlowPage";
 import SkillAnalysis from "./components/SkillAnalysis";
@@ -49,6 +50,7 @@ const AppRoutes = ({
       }}
     >
       <Routes>
+        <Route path="home" element={<WelcomePage />} />
         <Route path="flow" element={<FlowPage />} />
         <Route path="skills/:sessionId" element={<SkillAnalysis />} />
         <Route path="roadmap/:sessionId" element={<LearningRoadmap />} />

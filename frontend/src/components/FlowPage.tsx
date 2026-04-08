@@ -786,18 +786,14 @@ const FlowPage = () => {
       <div className="flex-1 p-6 md:p-10">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-xl font-bold gradient-text">IntelliLearn</h1>
-              <p className="text-xs text-muted-foreground">Personalized skill development</p>
-            </div>
-            {sessionId && (
+          {sessionId && (
+            <div className="flex justify-end mb-6">
               <Button variant="outline" size="sm" onClick={handleNewSession} className="gap-2">
                 <RefreshCw className="h-3.5 w-3.5" />
                 New Session
               </Button>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Stepper */}
           <Stepper current={currentStep} />
