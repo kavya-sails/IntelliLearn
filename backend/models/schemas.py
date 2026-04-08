@@ -22,6 +22,11 @@ class Domain(str, Enum):
     PYTHON = "python"
 
 
+class MessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
 class SkillLevel(str, Enum):
     BEGINNER = "beginner"
     INTERMEDIATE = "intermediate"
@@ -51,6 +56,16 @@ class SessionCreateResponse(BaseModel):
     session_id: int
     status: SessionStatus
     message: str
+
+
+class ChatMessage(BaseModel):
+    id: int
+    user_id: int
+    session_id: int
+    role: MessageRole
+    content: str
+    meta: Optional[Dict[str, Any]] = {}
+    created_at: datetime
 
 
 class ChatSession(BaseModel):

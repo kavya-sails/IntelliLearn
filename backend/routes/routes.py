@@ -9,17 +9,22 @@ import logging
 from services.agent_runner import run_agent
 from services.db_service import (
     create_session,
-    delete_existing_sessions,
     get_learning_resources,
     get_session,
+    save_chat_message,
+    get_chat_history,
     update_session_status,
+    update_session_goal,
     get_claimed_skills,
     get_gap_analysis,
     save_user,
     get_sessions_by_user,
+    delete_session,
 )
 from models.schemas import (
+    ChatMessageRequest,
     ChatMessageResponse,
+    MessageRole,
     SessionCreateResponse,
     SessionStatus,
     UserCreate,
@@ -108,8 +113,6 @@ async def set_session_goal(
 
 @router.post("/chat/new", response_model=SessionCreateResponse)
 async def create_new_chat(user_id: int):
-    ## delete existing sessions for user
-    # delete_existing_sessions(user_id)
     session = create_session(user_id)
 
     return SessionCreateResponse(
@@ -150,6 +153,13 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
                 status_code=400, detail="Could not extract text from PDF"
             )
 
+        save_chat_message(
+            user_id,
+            session_id,
+            MessageRole.USER,
+            f"[Uploaded resume: {file.filename}]",
+            meta={"had_file": True, "filename": file.filename},
+        )
         original_status = session.status
         update_session_status(user_id, session_id, SessionStatus.PARSING_SKILLS)
 
@@ -174,6 +184,7 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
             )
         else:
             reply_text = str(reply_data)
+        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
 
         updated_session = get_session(user_id, session_id)
 
@@ -191,6 +202,43 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/chat/{user_id}/{session_id}/history")
+async def get_history(user_id: int, session_id: int):
+    """
+    Get chat history for a session
+    """
+    session = get_session(user_id, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = get_chat_history(user_id, session_id)
+
+    return {
+        "session_id": session_id,
+        "status": session.status,
+        "goal": session.goal,
+        "domain": session.domain,
+        "messages": messages,
+    }
+
+
+@router.get("/chat/{user_id}/{session_id}/skills")
+async def get_skills(user_id: int, session_id: int):
+    """
+    Get extracted skills for a session
+    """
+    session = get_session(user_id, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    skills = get_claimed_skills(user_id, session_id)
+
+    if not skills:
+        return {"session_id": session_id, "skills": [], "skill_count": 0}
+
+    return {"session_id": session_id, "skills": skills["skills"]}
+
+
 @router.post("/chat/{user_id}/{session_id}/start_quiz")
 async def start_quiz(user_id: int, session_id: int):
     try:
@@ -203,6 +251,15 @@ async def start_quiz(user_id: int, session_id: int):
                 status_code=400,
                 detail=f"Cannot start quiz in current state: {session.status}",
             )
+
+        # Save user action in chat history
+        save_chat_message(
+            user_id,
+            session_id,
+            MessageRole.USER,
+            "[User started quiz]",
+            meta={"action": "generate_quiz"},
+        )
 
         original_status = session.status
         update_session_status(user_id, session_id, SessionStatus.QUIZ_IN_PROGRESS)
@@ -219,6 +276,15 @@ async def start_quiz(user_id: int, session_id: int):
         reply_data = agent_response.get("reply", [])
         if isinstance(reply_data, list):
             reply_data = {"quiz": reply_data}
+
+        # Save assistant response
+        save_chat_message(
+            user_id,
+            session_id,
+            MessageRole.ASSISTANT,
+            "Here are the questions for your quiz:",
+            reply_data,
+        )
 
         return {
             "session_id": session_id,
@@ -253,6 +319,18 @@ async def done_quiz(
                 detail=f"Cannot submit quiz in current state: {session.status}",
             )
 
+        # Save quiz results in chat history
+        save_chat_message(
+            user_id,
+            session_id,
+            MessageRole.USER,
+            "[User completed quiz]",
+            meta={
+                "action": "quiz_response",
+                "quiz_results": quiz_results,
+            },
+        )
+
         # Send results to agent for gap analysis
         prompt = {
             "session_id": session_id,
@@ -269,6 +347,10 @@ async def done_quiz(
         if isinstance(reply_data, list):
             reply_data = {"quiz_results": reply_data}
 
+        # Save assistant response
+        save_chat_message(
+            user_id, session_id, MessageRole.ASSISTANT, "Quiz results", reply_data
+        )
         updated_session = get_session(user_id, session_id)
         background_tasks.add_task(
             run_gap_analysis,
@@ -368,6 +450,22 @@ async def get_session_status(user_id: int, session_id: int):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"session_id": session_id, "status": session.status}
+
+
+@router.delete("/user/{user_id}/sessions/{session_id}")
+async def delete_user_session(user_id: int, session_id: int):
+    try:
+        ok = delete_session(user_id, session_id)
+        if not ok:
+            raise HTTPException(
+                status_code=404, detail="Session not found or could not be deleted"
+            )
+        return {"deleted": True, "session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error deleting session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/chat/{user_id}/{session_id}/learning_path")

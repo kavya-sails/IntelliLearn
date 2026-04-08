@@ -26,6 +26,28 @@ mcp = FastMCP(name="intellilearn-mcp")
 
 
 @mcp.tool()
+def get_session_status(session_id: int, user_id: int) -> dict:
+    """
+    Fetch the current status for a session.
+    """
+    conn = _conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """SELECT id AS session_id, user_id, status, goal, domain
+                   FROM chat_sessions
+                   WHERE id = %s AND user_id = %s""",
+                (session_id, user_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return {"error": "Session not found"}
+            return dict(row)
+    finally:
+        conn.close()
+
+
+@mcp.tool()
 def update_session_goal(user_id: int, session_id: int, goal: str, domain: str) -> dict:
     """
     Set the user's goal and detected domain on the session.
@@ -221,7 +243,6 @@ def save_gap_analysis(user_id: int, session_id: int, gap_analysis_json: str) -> 
     finally:
         conn.close()
 
-
 @mcp.tool()
 def get_gap_analysis(user_id: int, session_id: int) -> Optional[dict]:
     """Retrieve gap analysis report for a session. Returns None if not found."""
@@ -236,7 +257,6 @@ def get_gap_analysis(user_id: int, session_id: int) -> Optional[dict]:
             return dict(row) if row else None
     finally:
         conn.close()
-
 
 @mcp.tool()
 def save_learning_resources(user_id: int, session_id: int, resources_json: str) -> dict:
@@ -269,7 +289,6 @@ def save_learning_resources(user_id: int, session_id: int, resources_json: str) 
             }
     finally:
         conn.close()
-
 
 if __name__ == "__main__":
     mcp.run()

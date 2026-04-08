@@ -23,7 +23,7 @@ WORKFLOW:
 1. Receive user_id, resume_text, session_id, and domain from root agent
 2. Extract 3-10 relevant skills with proficiency levels
 3. Call save_claimed_skills(user_id, session_id, skills_json) to store them
-4. Return control to root agent by returning a confirmation message like "Skills extracted and saved successfully!" instead of the entire skills_json.
+4. Return control to root agent by returning a confirmation message like "Skills extracted and saved successfully!" and asking the user to start a quiz instead of the entire skills_json.
 
 Available Tool:
 - save_claimed_skills(user_id, session_id, skills_json): Store extracted skills as JSON string
