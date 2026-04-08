@@ -101,8 +101,8 @@ function pillToneClasses(tone: "strength" | "weakness" | "missing" | "overestima
 
 function toneColor(score: number) {
   if (score >= 80) return "hsl(145, 65%, 42%)"; // green
-  if (score >= 40) return "hsl(40, 95%, 55%)"; // yellow
-  return "hsl(0, 72%, 55%)"; // red
+  if (score >= 10) return "hsl(40, 74%, 54%)"; // yellow
+  else return "hsl(0, 72%, 55%)"; // red
 }
 
 function ProgressBar({ value }: { value: number }) {
@@ -225,6 +225,8 @@ function buildChart(data: SkillGapAnalysisData) {
         borderSkipped: false as const,
         barPercentage: 0.7,
         categoryPercentage: 0.7,
+        // Ensure even 0 values are visible as a thin line
+        minBarLength: 6,
       },
     ],
   };
@@ -612,8 +614,8 @@ const SkillAnalysis = ({ data }: { data?: SkillGapAnalysisData }) => {
         <div className="flex flex-wrap gap-4 mt-4 justify-center text-sm text-muted-foreground">
           {[
             { label: "Strength (80–100)", color: "bg-success" },
-            { label: "Medium (40–79)", color: "bg-warning" },
-            { label: "Missing (0–39)", color: "bg-destructive" },
+            { label: "Medium (20–79)", color: "bg-warning" },
+            { label: "Missing (0–20)", color: "bg-destructive" },
           ].map((item) => (
             <div key={item.label} className="flex items-center gap-2">
               <div className={cn("h-3 w-3 rounded-full", item.color)} />
