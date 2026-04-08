@@ -22,19 +22,6 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_user   ON chat_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_sessions_status ON chat_sessions(status);
 
--- ── CHAT MESSAGES ──────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS chat_messages (
-    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
-    session_id BIGINT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    role       TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-    content    TEXT NOT NULL,
-    meta       JSONB DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(user_id, session_id);
-
 -- ── CLAIMED SKILLS ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS claimed_skills (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
