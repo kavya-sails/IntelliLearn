@@ -14,10 +14,6 @@ load_dotenv()
 root_agent = LlmAgent(
     name="IntelliLearnOrchestrator",
     model=os.getenv("MODEL", "gemini-2.5-flash"),
-    # description=(
-    #     "Main conversational agent. Handles all chat turns, collects goal, "
-    #     "prompts for resume, and manages the session state machine."
-    # ),
     instruction=ROOT_INSTRUCTION,
     sub_agents=[
         goal_collection_agent,
