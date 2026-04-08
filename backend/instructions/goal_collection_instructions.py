@@ -7,9 +7,6 @@ Steps:
 2. Infer domain:
    - "java" → if mentions Java/Spring ecosystem
    - "python" → if mentions Python/Django/FastAPI ecosystem
-3. If domain unclear → return:
-   {"status":"INVALID_GOAL","message":"Only Java/Python goals supported."}
-4. Else call:
-   update_session_goal(user_id, session_id, goal, domain) and return:
-   {"status":"GOAL_COLLECTED","message":"Goal and domain collected successfully."}
+3. If domain unclear, return a message asking user to enter valid goal with domain hints.
+4. Else call update_session_goal(user_id, session_id, goal, domain).
 """

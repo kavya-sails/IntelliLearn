@@ -93,10 +93,8 @@ async def set_session_goal(
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response: {agent_response}")
         reply_data = agent_response.get("reply", {})
-        status = reply_data.get("status", "INVALID_GOAL")
         if isinstance(reply_data, dict):
             reply_text = reply_data.get("message", {})
-            status = reply_data.get("status", status)
         else:
             reply_text = str(reply_data)
 
@@ -105,7 +103,6 @@ async def set_session_goal(
         return ChatMessageResponse(
             session_id=session_id,
             message=reply_text,
-            goal_status=status,
             status=updated_session.status,
         )
 
