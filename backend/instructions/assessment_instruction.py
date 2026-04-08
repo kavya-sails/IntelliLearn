@@ -18,7 +18,7 @@ when action="generate_quiz":
             },
             ...
         ]  
-    3: Return the generated quiz in the same json format mentioned above to the root agent.
+    3. Return the generated quiz in the same json format mentioned above to the root agent. Don't send in string format, return as a JSON object/array.
 
 when action="quiz_response":
     1. For each quiz question in the input, identify the correct answer from the question and options, do not evaluate correctness or provide scoring.
