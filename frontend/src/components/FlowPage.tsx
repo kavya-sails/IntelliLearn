@@ -632,6 +632,12 @@ const FlowPage = () => {
       });
       if (!goalRes.ok) throw new Error("Failed to set goal");
 
+      const goalData = await goalRes.json();
+      if (goalData?.status?.toUpperCase() !== "COLLECTING_RESUME") {
+        setError(goalData?.message || "Please provide a valid career goal with a recognizable domain.");
+        return;
+      }
+
       setSessionStatus("COLLECTING_RESUME");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to submit goal");
@@ -816,8 +822,8 @@ const FlowPage = () => {
               />
             )}
 
-            {/* Step 3 */}
-            {currentStep === 3 && (
+            {/* Step 3 — or step 4 when quiz results are available in-session */}
+            {(currentStep === 3 || (currentStep === 4 && quizPhase === "submitted" && quizResults.length > 0)) && (
               <QuizStep
                 phase={quizPhase}
                 quiz={quiz}
@@ -832,8 +838,8 @@ const FlowPage = () => {
               />
             )}
 
-            {/* Step 4: after quiz done, prompt gap analysis */}
-            {currentStep === 4 && (
+            {/* Step 4: after quiz done (no in-session results), prompt gap analysis */}
+            {currentStep === 4 && !(quizPhase === "submitted" && quizResults.length > 0) && (
               <div className="flex flex-col gap-6 animate-fade-in">
                 <div className="text-center">
                   <div className="h-14 w-14 rounded-2xl gradient-primary flex items-center justify-center mx-auto mb-4">
@@ -864,7 +870,7 @@ const FlowPage = () => {
       </div>
 
       {/* Footer hint */}
-      {currentStep === 3 && quizPhase === "submitted" && (
+      {quizPhase === "submitted" && quizResults.length > 0 && (
         <div className="border-t border-border bg-card/50 backdrop-blur-sm px-6 py-3">
           <div className="max-w-2xl mx-auto flex items-center justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
