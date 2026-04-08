@@ -41,7 +41,7 @@ async def health_check():
 
 
 @router.get("/user/{user_id}/sessions")
-async def get_user_sessions(user_id: int,size : int):
+async def get_user_sessions(user_id: int, size: int):
     """
     Get all sessions for a user
     """
@@ -75,13 +75,43 @@ async def login_user(email: str, password: str):
 
 
 @router.post("/session/{user_id}/{session_id}/goal")
-async def set_session_goal(user_id: int, session_id: int, goal: str = Body(...)):
-    """Directly set the goal on a session without going through the chat agent"""
-    session = get_session(user_id, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    updated = update_session_goal(user_id, session_id, goal)
-    return {"session_id": session_id, "status": updated.status, "goal": updated.goal}
+async def set_session_goal(
+    user_id: int, session_id: int, user_message: str = Body(...)
+):
+    try:
+        session = get_session(user_id, session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        prompt = {
+            "session_id": session_id,
+            "user_id": session.user_id,
+            "user_message": user_message,
+            "action": "collect_goal",
+        }
+
+        agent_response = await run_agent(prompt, user_id, session_id)
+        logger.info(f"Agent response: {agent_response}")
+        reply_data = agent_response.get("reply", {})
+        status = reply_data.get("status", "INVALID_GOAL")
+        if isinstance(reply_data, dict):
+            reply_text = reply_data.get("message", {})
+            status = reply_data.get("status", status)
+        else:
+            reply_text = str(reply_data)
+
+        updated_session = get_session(user_id, session_id)
+
+        return ChatMessageResponse(
+            session_id=session_id,
+            message=reply_text,
+            goal_status=status,
+            status=updated_session.status,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error in send_message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/chat/new", response_model=SessionCreateResponse)
@@ -93,55 +123,6 @@ async def create_new_chat(user_id: int):
         status=session.status,
         message="New chat session created. Please share your career goal!",
     )
-
-
-@router.post("/chat/message", response_model=ChatMessageResponse)
-async def send_message(request: ChatMessageRequest):
-    try:
-        session_id = request.session_id
-        user_message = request.message
-        user_id = request.user_id
-
-        if not session_id:
-            session = create_session(user_id)
-            session_id = session.id
-        else:
-            session = get_session(user_id, session_id)
-            if not session:
-                raise HTTPException(status_code=404, detail="Session not found")
-
-        save_chat_message(user_id, session_id, MessageRole.USER, user_message)
-
-        prompt = {
-            "session_id": session_id,
-            "user_id": session.user_id,
-            "user_message": user_message,
-            "current_status": session.status,
-        }
-
-        agent_response = await run_agent(prompt, user_id, session_id)
-        logger.info(f"Agent response: {agent_response}")
-        reply_data = agent_response.get("reply", {})
-        if isinstance(reply_data, list):
-            reply_text = " ".join(str(item) for item in reply_data)
-        elif isinstance(reply_data, dict):
-            reply_text = reply_data.get("message", {})
-        else:
-            reply_text = str(reply_data)
-
-        save_chat_message(user_id, session_id, MessageRole.ASSISTANT, reply_text)
-
-        updated_session = get_session(user_id, session_id)
-
-        return ChatMessageResponse(
-            session_id=session_id,
-            message=reply_text,
-            status=updated_session.status,
-        )
-
-    except Exception as e:
-        logger.exception(f"Error in send_message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/chat/{user_id}/{session_id}/upload-resume")
@@ -479,7 +460,9 @@ async def delete_user_session(user_id: int, session_id: int):
     try:
         ok = delete_session(user_id, session_id)
         if not ok:
-            raise HTTPException(status_code=404, detail="Session not found or could not be deleted")
+            raise HTTPException(
+                status_code=404, detail="Session not found or could not be deleted"
+            )
         return {"deleted": True, "session_id": session_id}
     except HTTPException:
         raise

@@ -47,6 +47,7 @@ class ChatMessageRequest(BaseModel):
 class ChatMessageResponse(BaseModel):
     session_id: int
     message: str
+    goal_status: Optional[str] = None
     status: SessionStatus
     meta: Optional[Dict[str, Any]] = None
 
