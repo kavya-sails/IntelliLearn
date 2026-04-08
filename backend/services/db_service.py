@@ -71,6 +71,20 @@ def get_sessions_by_user(user_id: int, size: int = 5) -> List[Dict[str, Any]]:
             ]
 
 
+def update_session_goal(user_id: int, session_id: int, goal: str) -> ChatSession:
+    """Set the goal for a session and advance status to COLLECTING_RESUME"""
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                """UPDATE chat_sessions
+                   SET goal = %s, status = 'COLLECTING_RESUME', updated_at = now()
+                   WHERE id = %s AND user_id = %s
+                   RETURNING *""",
+                (goal, session_id, user_id),
+            )
+            return ChatSession.model_validate(dict(cur.fetchone()))
+
+
 def update_session_status(
     user_id: int, session_id: int, status: SessionStatus
 ) -> ChatSession:

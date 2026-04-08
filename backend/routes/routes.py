@@ -14,6 +14,7 @@ from services.db_service import (
     save_chat_message,
     get_chat_history,
     update_session_status,
+    update_session_goal,
     get_claimed_skills,
     get_gap_analysis,
     save_user,
@@ -71,6 +72,16 @@ async def login_user(email: str, password: str):
     if not user or user["password"] != password:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     return {"id": str(user["id"]), "name": user["name"], "email": user["email"]}
+
+
+@router.post("/session/{user_id}/{session_id}/goal")
+async def set_session_goal(user_id: int, session_id: int, goal: str = Body(...)):
+    """Directly set the goal on a session without going through the chat agent"""
+    session = get_session(user_id, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    updated = update_session_goal(user_id, session_id, goal)
+    return {"session_id": session_id, "status": updated.status, "goal": updated.goal}
 
 
 @router.post("/chat/new", response_model=SessionCreateResponse)
