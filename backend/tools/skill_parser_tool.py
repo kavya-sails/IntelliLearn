@@ -10,7 +10,6 @@ client = genai.Client(
     vertexai=True,
     project=os.getenv("GOOGLE_CLOUD_PROJECT"),
     location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
-    # api_key=os.getenv("GOOGLE_API_KEY"),
 )
 
 
@@ -40,14 +39,6 @@ def parse_and_save_skills(
             "status": "error",
             "message": f"File path {file_path} not found or invalid.",
         }
-
-    # with open(file_path, "rb") as f:
-    #     file_bytes = f.read()
-    # contents = [
-    #     Part.from_data(data=file_bytes, mime_type="application/pdf"),
-    #     Part.from_text(SKILL_EXTRACTION_PROMPT.replace("{domain}", domain))
-    #     # No need to inject resume_text — model reads the PDF directly
-    # ]
 
     try:
         with open(file_path, "rb") as pdf_file:

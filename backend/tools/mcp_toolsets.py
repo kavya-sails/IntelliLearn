@@ -22,19 +22,6 @@ def get_goal_collection_toolset():
     )
 
 
-def get_quiz_evaluation_toolset():
-    return McpToolset(
-        connection_params=StdioConnectionParams(
-            server_params=StdioServerParameters(
-                command=sys.executable,
-                args=[_MCP_SERVER_SCRIPT],
-            ),
-            timeout=120,
-        ),
-        tool_filter=["save_quiz", "update_session_status"],
-    )
-
-
 def get_gap_analysis_toolset():
     return McpToolset(
         connection_params=StdioConnectionParams(

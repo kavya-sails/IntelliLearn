@@ -11,7 +11,6 @@ client = genai.Client(
     vertexai=True,
     project=os.getenv("GOOGLE_CLOUD_PROJECT"),
     location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
-    # api_key=os.getenv("GOOGLE_API_KEY"),
 )
 
 logger = logging.getLogger(__name__)
