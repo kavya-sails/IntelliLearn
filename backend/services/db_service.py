@@ -1,3 +1,4 @@
+import json
 from typing import Optional, List, Dict, Any
 from models.schemas import (
     ChatSession,
@@ -82,6 +83,66 @@ def update_session_status(
                 (status, session_id, user_id),
             )
             return ChatSession.model_validate(dict(cur.fetchone()))
+
+
+def save_claimed_skills(user_id: int, session_id: int, skills: list) -> dict:
+    # Convert Pydantic objects to JSON string for psycopg2
+    skills_json = json.dumps([s.model_dump() for s in skills])
+
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                """INSERT INTO claimed_skills (user_id, session_id, skills, source)
+                    VALUES (%s, %s, %s::jsonb, 'resume')
+                    ON CONFLICT (session_id)
+                    DO UPDATE SET skills=EXCLUDED.skills, updated_at=now()
+                RETURNING *""",
+                (
+                    user_id,
+                    session_id,
+                    skills_json,
+                ),  # now a string, not a list of objects
+            )
+        return {"session_id": session_id, "skill_count": len(skills)}
+
+
+def save_quiz(user_id: int, session_id: int, quiz: list) -> dict:
+    if not isinstance(quiz, list):
+        raise ValueError("quiz must be a list")
+
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                """
+                INSERT INTO quiz_results (user_id, session_id, quiz)
+                VALUES (%s, %s, %s::jsonb)
+                ON CONFLICT (session_id)
+                DO UPDATE SET quiz = EXCLUDED.quiz
+                RETURNING session_id
+                """,
+                (user_id, session_id, json.dumps(quiz)),
+            )
+            result = cur.fetchone()
+
+    return {
+        "session_id": result["session_id"],
+        "quiz_saved": True,
+    }
+
+
+def get_quiz(user_id, session_id: int) -> list:
+    with get_db_connection() as conn:
+        with get_cursor(conn) as cur:
+            cur.execute(
+                "SELECT quiz FROM quiz_results WHERE session_id = %s AND user_id = %s",
+                (session_id, user_id),
+            )
+            result = cur.fetchone()
+
+    if not result:
+        raise ValueError("Quiz not found")
+
+    return result["quiz"]
 
 
 def get_claimed_skills(user_id: int, session_id: int) -> Optional[ClaimedSkills]:

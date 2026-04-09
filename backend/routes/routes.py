@@ -1,8 +1,6 @@
 import os
 import shutil
 import tempfile
-
-import PyPDF2
 from fastapi import APIRouter, UploadFile, File, HTTPException, Body, BackgroundTasks
 from typing import List
 import logging
@@ -12,10 +10,12 @@ from services.db_service import (
     delete_existing_sessions,
     get_learning_resources,
     get_session,
+    save_quiz,
     update_session_status,
     get_claimed_skills,
     get_gap_analysis,
     save_user,
+    get_quiz,
     get_sessions_by_user,
 )
 from models.schemas import (
@@ -108,8 +108,6 @@ async def set_session_goal(
 
 @router.post("/chat/new", response_model=SessionCreateResponse)
 async def create_new_chat(user_id: int):
-    ## delete existing sessions for user
-    # delete_existing_sessions(user_id)
     session = create_session(user_id)
 
     return SessionCreateResponse(
@@ -119,11 +117,14 @@ async def create_new_chat(user_id: int):
     )
 
 
+@router.delete("/chat/{user_id}/sessions")
+async def delete_user_sessions(user_id: int):
+    delete_existing_sessions(user_id)
+    return {"message": "Sessions deleted successfully"}
+
+
 @router.post("/chat/{user_id}/{session_id}/upload-resume")
 async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(...)):
-    """
-    Upload resume PDF and trigger skill parsing
-    """
     try:
         session = get_session(user_id, session_id)
         if not session:
@@ -132,23 +133,11 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
         if not file.filename.endswith(".pdf"):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            shutil.copyfileobj(file.file, tmp_file)
-            tmp_path = tmp_file.name
-
-        try:
-            with open(tmp_path, "rb") as pdf_file:
-                pdf_reader = PyPDF2.PdfReader(pdf_file)
-                resume_text = ""
-                for page in pdf_reader.pages:
-                    resume_text += page.extract_text()
-        finally:
-            os.unlink(tmp_path)
-
-        if not resume_text.strip():
-            raise HTTPException(
-                status_code=400, detail="Could not extract text from PDF"
-            )
+        # 1. Save file locally
+        suffix = os.path.splitext(file.filename)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            file_path = tmp.name
 
         original_status = session.status
         update_session_status(user_id, session_id, SessionStatus.PARSING_SKILLS)
@@ -157,7 +146,7 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
             "session_id": session_id,
             "user_id": session.user_id,
             "action": "parse_skills",
-            "resume_text": resume_text,
+            "file_path": file_path,
             "domain": session.domain,
         }
 
@@ -189,6 +178,9 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
         logger.exception(f"Error in upload_resume: {e}")
         update_session_status(user_id, session_id, original_status)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 
 @router.post("/chat/{user_id}/{session_id}/start_quiz")
@@ -198,7 +190,10 @@ async def start_quiz(user_id: int, session_id: int):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-        if session.status != SessionStatus.AWAITING_QUIZ:
+        if (
+            session.status != SessionStatus.AWAITING_QUIZ
+            and session.status != SessionStatus.QUIZ_IN_PROGRESS
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot start quiz in current state: {session.status}",
@@ -217,13 +212,18 @@ async def start_quiz(user_id: int, session_id: int):
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting quiz: {agent_response}")
         reply_data = agent_response.get("reply", [])
-        if isinstance(reply_data, list):
-            reply_data = {"quiz": reply_data}
+        safe_quiz = [
+            {
+                "question": q["question"],
+                "options": q["options"],
+                "skill_tested_on": q["skill_tested_on"],
+            }
+            for q in reply_data
+        ]
 
         return {
             "session_id": session_id,
-            "message": reply_data,
-            "quiz": reply_data.get("quiz", []),
+            "quiz": safe_quiz,
             "status": "QUIZ_IN_PROGRESS",
         }
 
@@ -252,43 +252,52 @@ async def done_quiz(
                 status_code=400,
                 detail=f"Cannot submit quiz in current state: {session.status}",
             )
-
+        saved_quiz = get_quiz(user_id, session_id)
+        updated_quiz = merge_quiz_with_answers(saved_quiz, quiz_results)
+        save_quiz(user_id, session_id, updated_quiz)
+        update_session_status(user_id, session_id, SessionStatus.QUIZ_DONE)
         # Send results to agent for gap analysis
-        prompt = {
-            "session_id": session_id,
-            "user_id": user_id,
-            "action": "quiz_response",
-            "quiz_results": quiz_results,
-        }
-
-        agent_response = await run_agent(prompt, user_id, session_id)
-
-        logger.info(f"Agent response after quiz submission: {agent_response}")
-
-        reply_data = agent_response.get("reply", [])
-        if isinstance(reply_data, list):
-            reply_data = {"quiz_results": reply_data}
-
-        updated_session = get_session(user_id, session_id)
         background_tasks.add_task(
             run_gap_analysis,
             user_id,
             session_id,
-            updated_session.goal,
-            updated_session.status,
+            session.goal,
+            SessionStatus.QUIZ_DONE,
         )
 
         return {
             "session_id": session_id,
-            "message": reply_data.get("quiz_results", reply_data),
-            "status": updated_session.status,
+            "message": updated_quiz,
+            "status": SessionStatus.QUIZ_DONE,
         }
 
     except HTTPException:
         raise
     except Exception as e:
+        update_session_status(user_id, session_id, SessionStatus.QUIZ_IN_PROGRESS)
         logger.exception(f"Error in done_quiz: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def merge_quiz_with_answers(original_quiz, user_answers):
+    answer_map = {q["question"]: q for q in user_answers}
+
+    updated_quiz = []
+
+    for q in original_quiz:
+        user_q = answer_map.get(q["question"])
+
+        updated_quiz.append(
+            {
+                "question": q["question"],
+                "options": q["options"],
+                "correct_answer": q["correct_answer"],
+                "selected_answer": user_q.get("selected_answer") if user_q else None,
+                "skill_tested_on": q["skill_tested_on"],
+            }
+        )
+
+    return updated_quiz
 
 
 async def run_gap_analysis(

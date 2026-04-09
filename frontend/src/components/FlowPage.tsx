@@ -29,8 +29,8 @@ type QuizItem = {
 type QuizResult = {
   question: string;
   options?: string[];
-  answer: string;
-  user_response: string;
+  correct_answer: string;
+  selected_answer: string;
   skill_tested_on: string;
 };
 
@@ -460,7 +460,7 @@ function QuizStep({
 
   // phase === "submitted" — show results
   const correctCount = quizResults.filter(
-    (r) => r.user_response?.trim() === r.answer?.trim()
+    (r) => r.selected_answer?.trim() === r.correct_answer?.trim()
   ).length;
 
   return (
@@ -488,8 +488,8 @@ function QuizStep({
 
       <div className="space-y-3">
         {quizResults.map((result, idx) => {
-          const userAns = result.user_response?.trim();
-          const correctAns = result.answer?.trim();
+          const userAns = result.selected_answer?.trim();
+          const correctAns = result.correct_answer?.trim();
           const isCorrect = userAns === correctAns;
           return (
             <div
@@ -571,36 +571,51 @@ const FlowPage = () => {
   const [quizSelections, setQuizSelections] = useState<Record<number, number[]>>({});
   const [quizResults, setQuizResults] = useState<QuizResult[]>([]);
 
-  // ── On mount: restore session if exists ────────────────────────────────────
+  // ── On mount: fetch latest session and restore ────────────────────────────
   useEffect(() => {
     const userId = localStorage.getItem("user_id");
-    const sid = localStorage.getItem("session_id");
 
-    if (!userId || !sid) {
+    if (!userId) {
       setInitDone(true);
       return;
     }
 
-    Promise.all([
-      fetch(`${API_BASE}/chat/${userId}/${sid}/status`).then((r) => r.json()),
-      fetch(`${API_BASE}/chat/${userId}/${sid}/history`).then((r) => r.json()),
-    ])
-      .then(([statusData, historyData]) => {
-        const status: string = statusData?.status ?? "";
+    // Fetch latest session
+    fetch(`${API_BASE}/user/${userId}/sessions?size=1`)
+      .then((r) => r.json())
+      .then((data) => {
+        const sessions = data?.sessions ?? [];
+        if (sessions.length === 0) {
+          setInitDone(true);
+          return;
+        }
+
+        const latestSession = sessions[0];
+        const sid = latestSession.id;
+        const status = latestSession.status ?? "";
+
+        // Store session in localStorage
+        localStorage.setItem("session_id", String(sid));
         setSessionId(Number(sid));
         setSessionStatus(status);
-        if (historyData?.goal) setGoal(historyData.goal);
 
-        // If quiz was already submitted, we can show the "View Gap Analysis" step
+        // Load goal if available
+        if (latestSession.goal) {
+          setGoal(latestSession.goal);
+        }
+
+        // Set quiz phase based on status
         const step = statusToStep(status);
         if (step >= 4) {
           setQuizPhase("submitted");
         }
+
+        setInitDone(true);
       })
-      .catch(() => {
-        localStorage.removeItem("session_id");
-      })
-      .finally(() => setInitDone(true));
+      .catch((err) => {
+        console.error("Failed to fetch sessions:", err);
+        setInitDone(true);
+      });
   }, []);
 
   const currentStep = statusToStep(sessionStatus);
@@ -723,13 +738,20 @@ const FlowPage = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const payload = quiz.map((q, qi) => ({
-        id: q.id,
-        question: q.question,
-        options: q.options,
-        skill_tested_on: q.skill_tested_on,
-        selected_options: (quizSelections[qi] ?? []).map((oi) => q.options[oi]).filter(Boolean),
-      }));
+      const payload = quiz.map((q, qi) => {
+        const selectedIndices = quizSelections[qi] ?? [];
+        const selectedAnswer = selectedIndices
+          .map((oi) => String.fromCharCode(65 + oi))
+          .join(",");
+
+        return {
+          id: q.id,
+          question: q.question,
+          options: q.options,
+          skill_tested_on: q.skill_tested_on,
+          selected_answer: selectedAnswer,
+        };
+      });
 
       const res = await fetch(
         `${API_BASE}/chat/${encodeURIComponent(userId)}/${encodeURIComponent(sid)}/done_quiz`,
@@ -760,7 +782,17 @@ const FlowPage = () => {
   };
 
   // ── New session ────────────────────────────────────────────────────────────
-  const handleNewSession = () => {
+  const handleNewSession = async () => {
+    const userId = localStorage.getItem("user_id");
+    if (userId) {
+      try {
+        await fetch(`${API_BASE}/chat/${userId}/sessions`, {
+          method: "DELETE",
+        });
+      } catch (e) {
+        console.error("Failed to delete sessions:", e);
+      }
+    }
     localStorage.removeItem("session_id");
     setSessionId(null);
     setSessionStatus("");

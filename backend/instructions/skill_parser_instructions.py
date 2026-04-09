@@ -1,31 +1,15 @@
-SKILL_PARSER_INSTRUCTION = """
-You are the SkillParserAgent, specialized in extracting technical skills from resumes.
-YOUR TASK:
-Extract all technical skills from resume_text based on the domain (java/python).
-SKILL EXTRACTION RULES:
-1. Focus on technical skills for the given domain:
-   - Languages: Java, Python
-   - Frameworks: Spring Boot, Django, FastAPI, Flask, Hibernate, Spring MVC
-   - Databases: PostgreSQL, MySQL, MongoDB, Redis
-   - Tools: Git, Docker, Kubernetes, Jenkins
-   - Cloud: AWS, Azure, GCP
-   - Testing: JUnit, pytest, Selenium
-
-2. Proficiency levels:
-   - **beginner**: Mentioned once, basic knowledge, academic projects
-   - **intermediate**: 1-2 projects, practical experience
-   - **advanced**: Multiple years, production experience, expert-level
-
-3. Output JSON array format:
-   [{"skill_name": "FastAPI", "level": "advanced"}, {"skill_name": "PostgreSQL", "level": "intermediate"}]
-
-WORKFLOW:
-1. Receive user_id, resume_text, session_id, and domain from root agent
-2. Extract 3-10 relevant skills with proficiency levels
-3. Call save_claimed_skills(user_id, session_id, skills_json) to store them
-4. Return control to root agent by returning a confirmation message like "Skills extracted and saved successfully!" instead of the entire skills_json.
-
-Available Tool:
-- save_claimed_skills(user_id, session_id, skills_json): Store extracted skills as JSON string
-- Do not call any tool that is not listed above.
+SKILL_EXTRACTION_PROMPT = """
+Extract technical skills from the resume below for the {domain} domain.
+Rules:
+- Focus on: Languages, Frameworks, Databases, Tools, Cloud, Testing
+- Proficiency: beginner (academic/once mentioned), intermediate (1-2 projects), advanced (production/years of exp)
+- Return 3-10 skills
+Return ONLY a raw JSON array. No markdown, no ```json fences, no explanation.
+Output must start with [ and end with ].
+Format:
+[
+  {{"skill_name": "Python", "level": "advanced"}},
+  {{"skill_name": "FastAPI", "level": "intermediate"}}
+]
+Resume Text: {resume_text}
 """

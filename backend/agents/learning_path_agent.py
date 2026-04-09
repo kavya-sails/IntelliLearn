@@ -2,10 +2,9 @@ from google.adk.agents import LlmAgent
 from instructions.learning_path_instructions import LEARNING_PATH_INSTRUCTIONS
 import os
 from dotenv import load_dotenv
-from common.mcp_toolsets import get_pgsql_toolset
+from tools.mcp_toolsets import get_learning_path_toolset
 
 load_dotenv()
-pgsql_toolset = get_pgsql_toolset()
 
 learning_path_agent = LlmAgent(
     name="LearningPathAgent",
@@ -15,5 +14,5 @@ learning_path_agent = LlmAgent(
         "Curates a list of relevant courses and resources to help the user achieve their learning goals."
     ),
     instruction=LEARNING_PATH_INSTRUCTIONS,
-    tools=[pgsql_toolset],
+    tools=[get_learning_path_toolset()],
 )

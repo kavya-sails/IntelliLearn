@@ -37,11 +37,5 @@ WORKFLOW:
 
 4. Do not include any resources that are not relevant to the user's goal and gap analysis.
 5. update the session status to "LEARNING_PATH_COMPLETE" after saving the learning path using the update_session_status tool.
-
-Available Tools:
-- get_gap_analysis(user_id, session_id)
-- save_learning_resources(user_id, session_id, resources_json)
-- update_session_status(user_id, session_id, status)
-- Do not call any tool that is not listed above.
-- Don't return the generated learning path instead just return a confirmation message.
+6. Don't return the generated learning path instead just return a confirmation message to the root_agent.
 """

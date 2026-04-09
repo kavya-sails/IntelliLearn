@@ -2,6 +2,7 @@ import uuid
 import json
 import logging
 import re
+from typing import Any, Dict, Optional
 
 from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
@@ -23,71 +24,92 @@ def strip_markdown_json(text: str) -> str:
     return text
 
 
-async def run_agent(prompt: dict, user_id: int, session_id: int | None = None):
+async def run_agent(
+    prompt: Dict[str, Any], user_id: int, session_id: Optional[int] = None
+) -> Dict[str, Any]:
+
     user_id = str(user_id)
-    session_id = str(session_id) or str(uuid.uuid4())
+    session_id = str(session_id) if session_id else str(uuid.uuid4())
 
     logger.info(
-        f"kavya Running agent | user_id={user_id} | session_id={session_id} | prompt={prompt}"
+        f"Running agent | user_id={user_id} | session_id={session_id} | prompt={prompt}"
     )
 
     existing_session = await session_service.get_session(
         user_id=user_id, session_id=session_id, app_name=APP_NAME
     )
 
-    if existing_session:
-        logger.info(f"ADK session {session_id} already exists, reusing it")
-    else:
+    if not existing_session:
         await session_service.create_session(
             user_id=user_id, session_id=session_id, app_name=APP_NAME
         )
-        logger.info(f"Created new ADK session {session_id}")
+        logger.info(f"Created new session: {session_id}")
+    else:
+        logger.info(f"Reusing session: {session_id}")
 
     user_message = types.Content(
         role="user", parts=[types.Part.from_text(text=json.dumps(prompt))]
     )
 
-    reply = ""
+    reply_parts = []
+    last_tool_result = None
+    should_return_directly = False
 
     try:
         async for event in runner.run_async(
             user_id=user_id, session_id=session_id, new_message=user_message
         ):
-            logger.info(f"kavya Received event: {type(event).__name__} | {event}")
-            if hasattr(event, "text") and event.text:
-                reply += event.text
+            logger.info(f"Received event: {type(event).__name__} | {event}")
 
-            elif hasattr(event, "content") and event.content:
-                if hasattr(event.content, "parts"):
-                    for part in event.content.parts:
-                        if hasattr(part, "text") and part.text:
-                            reply += part.text
+            content = getattr(event, "content", None)
+            if not content:
+                continue
+            parts = getattr(content, "parts", None)
+            if not parts:
+                continue
 
-                        if hasattr(part, "function_call") and part.function_call:
-                            fc = part.function_call
-                            logger.info(
-                                f"kavya Tool call: {fc.name} | args: {dict(fc.args)}"
-                            )
+            for part in parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    fc = part.function_call
+                    logger.info(f"Tool call → {fc.name} | args: {dict(fc.args)}")
+                    if fc.name in ["generate_quiz", "parse_and_save_skills"]:
+                        should_return_directly = True
 
-                        if (
-                            hasattr(part, "function_response")
-                            and part.function_response
-                        ):
-                            fr = part.function_response
-                            logger.info(
-                                f"kavya Tool response: {fr.name} | result: {fr.response}"
-                            )
+                if hasattr(part, "function_response") and part.function_response:
+                    fr = part.function_response
+                    logger.info(f"Tool response → {fr.name}")
+
+                    result = fr.response.get("result")
+
+                    if hasattr(result, "model_dump"):
+                        last_tool_result = result.model_dump()
+                    else:
+                        last_tool_result = result
+
+                if hasattr(part, "text") and part.text:
+                    reply_parts.append(part.text)
+
+            if should_return_directly and last_tool_result is not None:
+                logger.info("Returning direct tool result (single-step tool)")
+                return {"session_id": session_id, "reply": last_tool_result}
 
     except Exception as e:
-        logger.exception(f"Error while running agent {e}")
+        logger.exception(f"Error while running agent: {e}")
         raise
+    raw = "".join(reply_parts).strip()
+    raw = strip_markdown_json(raw)
 
-    # Strip markdown fences
-    reply = strip_markdown_json(reply)
+    if raw:
+        try:
+            parsed_reply = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning(f"Non-JSON response from agent: {raw}")
+            parsed_reply = {"message": raw}
 
-    try:
-        parsed_reply = json.loads(reply)
-    except json.JSONDecodeError:
-        parsed_reply = {"session_id": session_id, "message": reply}
+        return {"session_id": session_id, "reply": parsed_reply}
 
-    return {"session_id": session_id, "reply": parsed_reply}
+    if last_tool_result is not None:
+        logger.info("Fallback: returning last tool result")
+        return {"session_id": session_id, "reply": last_tool_result}
+
+    return {"session_id": session_id, "reply": {"message": "No response generated"}}

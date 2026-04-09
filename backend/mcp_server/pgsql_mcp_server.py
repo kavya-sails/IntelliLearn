@@ -77,57 +77,6 @@ def update_session_status(user_id: int, session_id: int, status: str) -> dict:
 
 
 @mcp.tool()
-def save_claimed_skills(user_id: int, session_id: int, skills_json: str) -> dict:
-    """
-    Upsert extracted skills for a session.
-    Args:
-        user_id:     ID of the user
-        session_id:  ID of the chat session
-        skills_json: JSON array string. Each element:
-                       {"skill_name": "FastAPI", "level": "advanced"}
-                     level must be: beginner | intermediate | advanced
-    Returns: {session_id, skill_count, skills}
-    """
-    try:
-        skills = json.loads(skills_json)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"skills_json is not valid JSON: {e}")
-
-    if not isinstance(skills, list):
-        raise ValueError("skills_json must be a JSON array")
-
-    for i, s in enumerate(skills):
-        if "skill_name" not in s:
-            raise ValueError(f"skills[{i}] missing 'skill_name'")
-        if "level" not in s:
-            raise ValueError(f"skills[{i}] missing 'level'")
-        if s["level"] not in ("beginner", "intermediate", "advanced"):
-            raise ValueError(
-                f"skills[{i}].level must be beginner|intermediate|advanced"
-            )
-
-    conn = _conn()
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
-                """INSERT INTO claimed_skills (user_id, session_id, skills, source)
-                   VALUES (%s, %s, %s::jsonb, 'resume')
-                   ON CONFLICT (session_id)
-                   DO UPDATE SET skills=EXCLUDED.skills, updated_at=now()
-                   RETURNING *""",
-                (user_id, session_id, json.dumps(skills)),
-            )
-            row = dict(cur.fetchone())
-            return {
-                "session_id": session_id,
-                "skill_count": len(skills),
-                "skills": row["skills"],
-            }
-    finally:
-        conn.close()
-
-
-@mcp.tool()
 def get_claimed_skills(user_id: int, session_id: int) -> Optional[dict]:
     """Retrieve claimed skills row for a session. Returns None if not found."""
     conn = _conn()

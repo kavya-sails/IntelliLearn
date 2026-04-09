@@ -8,5 +8,5 @@ Steps:
    - "java" → if mentions Java/Spring ecosystem
    - "python" → if mentions Python/Django/FastAPI ecosystem
 3. If domain unclear, return a message asking user to enter valid goal with domain hints.
-4. Else call update_session_goal(user_id, session_id, goal, domain).
+4. Else call update_session_goal(user_id, session_id, goal, domain) and return a success message to the root_agent.
 """

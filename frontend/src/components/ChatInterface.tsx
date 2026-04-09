@@ -16,8 +16,8 @@ type QuizItem = {
 type QuizResult = {
   question: string;
   options?: string[];
-  answer: string;
-  user_response: string;
+  correct_answer: string;
+  selected_answer: string;
   skill_tested_on: string;
 };
 
@@ -385,12 +385,16 @@ const ChatInterface = () => {
     const quiz_results = quizMessage.quiz.map((q, qi) => {
       const selKey = `${quizMessage.id}:${qi}`;
       const selectedIdx = quizSelections[selKey] ?? [];
+      const selectedAnswer = selectedIdx
+        .map((oi) => String.fromCharCode(65 + oi))
+        .join(",");
+
       return {
         id: q.id,
         question: q.question,
         options: q.options,
         skill_tested_on: q.skill_tested_on,
-        selected_options: selectedIdx.map((oi) => q.options[oi]).filter(Boolean),
+        selected_answer: selectedAnswer,
       };
     });
 
@@ -419,7 +423,7 @@ const ChatInterface = () => {
       
       if (Array.isArray(data?.message)) {
         quizResults = data.message;
-        const correctCount = quizResults.filter(r => r.user_response === r.answer).length;
+        const correctCount = quizResults.filter(r => r.selected_answer === r.correct_answer).length;
         messageContent = `You answered ${correctCount} out of ${quizResults.length} correctly!`;
       }
 
@@ -656,8 +660,8 @@ const ChatInterface = () => {
                 {msg.role === "ai" && msg.quizResults && msg.quizResults.length > 0 && (
                   <div className="mt-3 space-y-3">
                     {msg.quizResults.map((result, idx) => {
-                      const userAnswer = result.user_response?.trim() || result.user_response;
-                      const correctAnswer = result.answer?.trim() || result.answer;
+                      const userAnswer = result.selected_answer?.trim() || result.selected_answer;
+                      const correctAnswer = result.correct_answer?.trim() || result.correct_answer;
                       const isCorrect = userAnswer === correctAnswer;
                       return (
                         <div 

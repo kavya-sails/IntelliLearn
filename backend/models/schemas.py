@@ -33,6 +33,10 @@ class Skill(BaseModel):
     level: SkillLevel
 
 
+class SkillsResponse(BaseModel):
+    skills: List[Skill]
+
+
 class ChatMessageRequest(BaseModel):
     session_id: Optional[int] = None
     message: str
@@ -85,3 +89,26 @@ class ClaimedSkills(BaseModel):
     source: str
     created_at: datetime
     updated_at: datetime
+
+
+class QuizQuestion(BaseModel):
+    question: str
+    options: List[str]
+    correct_answer: str
+    skill_tested_on: str
+
+
+class QuizOutput(BaseModel):
+    quiz: List[QuizQuestion]
+
+
+class QuizAnswer(BaseModel):
+    question: str
+    options: List[str]
+    correct_answer: str
+    selected_answer: str
+    skill_tested_on: str
+
+
+class QuizResultOutput(BaseModel):
+    quiz_results: List[QuizAnswer]

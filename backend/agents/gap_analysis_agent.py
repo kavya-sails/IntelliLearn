@@ -2,11 +2,9 @@ from google.adk.agents import LlmAgent
 from instructions.gap_analysis_instructions import GAP_ANALYSIS_INSTRUCTIONS
 import os
 from dotenv import load_dotenv
-from common.mcp_toolsets import get_pgsql_toolset
+from tools.mcp_toolsets import get_gap_analysis_toolset
 
 load_dotenv()
-
-pgsql_toolset = get_pgsql_toolset()
 
 gap_analysis_agent = LlmAgent(
     name="GapAnalysisAgent",
@@ -16,5 +14,5 @@ gap_analysis_agent = LlmAgent(
         "Showcases the user's performance across different skill areas visually."
     ),
     instruction=GAP_ANALYSIS_INSTRUCTIONS,
-    tools=[get_pgsql_toolset()]
+    tools=[get_gap_analysis_toolset()],
 )
