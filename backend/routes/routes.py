@@ -81,7 +81,7 @@ async def set_session_goal(
         prompt = {
             "session_id": session_id,
             "user_id": session.user_id,
-            "user_message": user_message,
+            "user_message": "My career goal is " + user_message,
             "action": "collect_goal",
         }
 
@@ -148,6 +148,7 @@ async def upload_resume(user_id: int, session_id: int, file: UploadFile = File(.
             "action": "parse_skills",
             "file_path": file_path,
             "domain": session.domain,
+            "message": "Please parse and extract relevant skills from the uploaded resume.",
         }
 
         agent_response = await run_agent(prompt, session.user_id, session_id)
@@ -207,6 +208,7 @@ async def start_quiz(user_id: int, session_id: int):
             "user_id": user_id,
             "action": "generate_quiz",
             "current_status": SessionStatus.QUIZ_IN_PROGRESS,
+            "message": "Please generate a quiz based on the user's claimed skills.",
         }
 
         agent_response = await run_agent(prompt, user_id, session_id)
@@ -315,6 +317,7 @@ async def run_gap_analysis(
             "user_id": user_id,
             "action": "analyze_gaps",
             "goal": goal,
+            "message": "Please analyze the quiz results and identify skill gaps for the user's career goal.",
         }
         update_session_status(
             user_id, session_id, SessionStatus.GAP_ANALYSIS_IN_PROGRESS
@@ -362,6 +365,7 @@ async def generate_plan(
             "user_id": user_id,
             "action": "generate_plan",
             "goal": goal,
+            "message": "Please create a personalized learning path based on the user's goal and gap analysis.",
         }
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting plan generation: {agent_response}")

@@ -14,6 +14,7 @@ root_agent = LlmAgent(
     name="IntelliLearnOrchestrator",
     model=os.getenv("MODEL", "gemini-2.5-flash"),
     instruction=ROOT_INSTRUCTION,
+    description="An agent that orchestrates the career development process by coordinating sub-agents and tools to help users achieve their career goals.",
     sub_agents=[
         goal_collection_agent,
         gap_analysis_agent,
