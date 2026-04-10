@@ -370,8 +370,7 @@ async def generate_plan(
             "session_id": session_id,
             "user_id": user_id,
             "action": "generate_plan",
-            "goal": goal,
-            "message": "Please create a personalized learning path based on the user's goal and gap analysis.",
+            "message": "Please create a personalized learning path based on the user's gap analysis report.",
         }
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after starting plan generation: {agent_response}")

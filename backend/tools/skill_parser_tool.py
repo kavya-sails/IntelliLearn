@@ -1,3 +1,4 @@
+import json
 import re
 import os
 import PyPDF2
@@ -10,6 +11,7 @@ client = genai.Client(
     vertexai=True,
     project=os.getenv("GOOGLE_CLOUD_PROJECT"),
     location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+    # api_key=os.getenv("GOOGLE_API_KEY"),
 )
 
 
@@ -60,7 +62,8 @@ def parse_and_save_skills(
     raw = strip_markdown_json(response.text.strip())
 
     try:
-        parsed = SkillsResponse.model_validate_json(f'{{"skills": {raw}}}')
+        parsed_json = json.loads(raw)
+        parsed = SkillsResponse.model_validate({"skills": parsed_json})
         skills = parsed.skills
     except Exception as e:
         raise ValueError(f"Invalid LLM response after stripping: {e}\nRaw was: {raw}")

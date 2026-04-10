@@ -1,3 +1,4 @@
+import json
 import re
 import logging
 from jsonschema import ValidationError
@@ -11,6 +12,7 @@ client = genai.Client(
     vertexai=True,
     project=os.getenv("GOOGLE_CLOUD_PROJECT"),
     location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
+    # api_key=os.getenv("GOOGLE_API_KEY"),
 )
 
 logger = logging.getLogger(__name__)
@@ -43,7 +45,10 @@ def generate_quiz(user_id: int, session_id: int) -> list:
     raw = strip_markdown_json(response.text.strip())
 
     try:
-        quiz_obj = QuizOutput.model_validate_json(f'{{"quiz": {raw}}}')
+        parsed = json.loads(raw)
+        quiz_obj = QuizOutput.model_validate({"quiz": parsed})
+    except (json.JSONDecodeError, Exception) as e:
+        raise ValueError(f"Invalid LLM response: {e}")
     except ValidationError as e:
         raise ValueError(f"Invalid LLM response: {e}")
     quiz_list = [q.model_dump() for q in quiz_obj.quiz]
