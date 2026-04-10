@@ -53,7 +53,7 @@ STEP 5: Save and finalize — you MUST call both tools below:
       session_id=<session_id> (integer)
       status="GAP_ANALYSIS_COMPLETE"
 
-IMPORTANT: gap_analysis_json must be a valid JSON string (not a Python dict). Do NOT skip these tool calls.
+IMPORTANT: gap_analysis_json must be a valid JSON string (not a Python dict). Do NOT skip these tool calls. DO NOT wrap tool calls in Python-like syntax (e.g., no 'print()', no 'default_api').
 
 Final Step: After both tools succeed, return only a short confirmation: "Gap analysis complete."
 """

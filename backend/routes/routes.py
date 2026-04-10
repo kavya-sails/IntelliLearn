@@ -259,13 +259,7 @@ async def done_quiz(
         save_quiz(user_id, session_id, updated_quiz)
         update_session_status(user_id, session_id, SessionStatus.QUIZ_DONE)
         # Send results to agent for gap analysis
-        background_tasks.add_task(
-            run_gap_analysis,
-            user_id,
-            session_id,
-            session.goal,
-            SessionStatus.QUIZ_DONE,
-        )
+        background_tasks.add_task(run_gap_analysis, user_id, session_id, session.goal)
 
         return {
             "session_id": session_id,
@@ -302,38 +296,42 @@ def merge_quiz_with_answers(original_quiz, user_answers):
     return updated_quiz
 
 
-async def run_gap_analysis(
-    user_id: int, session_id: int, goal: str, status: SessionStatus
-):
+async def run_gap_analysis(user_id: int, session_id: int, goal: str):
     try:
-        if status != SessionStatus.QUIZ_DONE:
-            logger.error(
-                f"Session status not updated to QUIZ_DONE after quiz submission. Cannot proceed to gap analysis. Current status: {status}"
+        max_attempts = 2
+
+        for attempt in range(1, max_attempts + 1):
+            logger.info(
+                f"Running gap analysis attempt {attempt} for session {session_id}"
             )
-            return
+            prompt = {
+                "session_id": session_id,
+                "user_id": user_id,
+                "action": "analyze_gaps",
+                "goal": goal,
+                "message": "Please analyze the quiz results and identify skill gaps for the user's career goal.",
+            }
 
-        prompt = {
-            "session_id": session_id,
-            "user_id": user_id,
-            "action": "analyze_gaps",
-            "goal": goal,
-            "message": "Please analyze the quiz results and identify skill gaps for the user's career goal.",
-        }
-        update_session_status(
-            user_id, session_id, SessionStatus.GAP_ANALYSIS_IN_PROGRESS
-        )
-        agent_response = await run_agent(prompt, user_id, session_id)
-        logger.info(f"Agent response after gap analysis: {agent_response}")
+            agent_response = await run_agent(prompt, user_id, session_id)
+            logger.info(f"Agent response: {agent_response}")
 
-        saved = get_gap_analysis(user_id, session_id)
-        if not saved:
-            logger.error(
-                f"Gap analysis was not saved for user={user_id} session={session_id}. Skipping learning path."
+            saved = get_gap_analysis(user_id, session_id)
+            updated_session = get_session(user_id, session_id)
+            if saved and updated_session.status == SessionStatus.GAP_ANALYSIS_COMPLETE:
+                logger.info(f"Gap analysis successful on attempt {attempt}")
+                await generate_plan(
+                    user_id,
+                    session_id,
+                    SessionStatus.GAP_ANALYSIS_COMPLETE,
+                    goal,
+                )
+                return
+            logger.warning(
+                f"Gap analysis failed validation on attempt {attempt} "
+                f"(saved={saved}, status={updated_session.status})"
             )
-            return
-
-        await generate_plan(
-            user_id, session_id, SessionStatus.GAP_ANALYSIS_COMPLETE, goal
+        logger.error(
+            f"Gap analysis failed after {max_attempts} attempts for session {session_id}"
         )
 
     except Exception as e:
