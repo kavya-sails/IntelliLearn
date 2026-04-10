@@ -79,6 +79,9 @@ async def run_agent(
                     fr = part.function_response
                     logger.info(f"Tool response → {fr.name}")
 
+                    if fr.name == "transfer_to_agent":
+                        continue
+
                     result = fr.response.get("result")
 
                     if hasattr(result, "model_dump"):

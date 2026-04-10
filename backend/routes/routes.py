@@ -324,6 +324,14 @@ async def run_gap_analysis(
         )
         agent_response = await run_agent(prompt, user_id, session_id)
         logger.info(f"Agent response after gap analysis: {agent_response}")
+
+        saved = get_gap_analysis(user_id, session_id)
+        if not saved:
+            logger.error(
+                f"Gap analysis was not saved for user={user_id} session={session_id}. Skipping learning path."
+            )
+            return
+
         await generate_plan(
             user_id, session_id, SessionStatus.GAP_ANALYSIS_COMPLETE, goal
         )
